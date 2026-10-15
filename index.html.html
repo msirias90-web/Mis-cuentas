@@ -1,0 +1,1747 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow, noarchive" />
+<title>Supply Master</title>
+<style>
+  html, body, #root { margin:0; padding:0; min-height:100%; background:#F7F4EC; }
+  #aviso { font-family:system-ui,sans-serif; color:#6C7571; display:grid; place-items:center;
+           min-height:100vh; padding:24px; text-align:center; }
+  #aviso .malo { max-width:640px; text-align:left; }
+  #aviso .malo b { display:block; color:#8E3B2F; font-size:17px; margin-bottom:8px; }
+  #aviso .malo pre { background:#fff; border:1px solid #DFD8C8; border-radius:3px; padding:12px;
+                     font-size:12px; white-space:pre-wrap; word-break:break-word; color:#1B2321; }
+</style>
+</head>
+<body>
+<div id="root"><div id="aviso"><span>Cargando…</span></div></div>
+
+<script type="text/plain" id="codigo-app">
+/* window.storage solo existe dentro de Claude. Fuera de ahi guardamos
+   en el navegador para que la aplicacion funcione igual. */
+if (!window.storage) {
+  window.storage = {
+    get: async (k) => {
+      const v = localStorage.getItem(k);
+      if (v === null) throw new Error("no existe");
+      return { key: k, value: v };
+    },
+    set: async (k, v) => { localStorage.setItem(k, v); return { key: k, value: v }; },
+    delete: async (k) => { localStorage.removeItem(k); return { key: k, deleted: true }; },
+    list: async (p = "") => ({ keys: Object.keys(localStorage).filter((k) => k.startsWith(p)) }),
+  };
+}
+
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ==================================================================
+   Programa de reconocimiento por puntos
+   - Coordinación: otorga puntos, administra premios, entrega canjes
+   - Colaborador: consulta su saldo, ve el catálogo y canjea
+   El saldo nunca se almacena: se calcula sumando los movimientos.
+   ================================================================== */
+
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+.rec {
+  --verde:#06302B; --verde-2:#0B463D;
+  --oro:#AF862E; --oro-claro:#D9BE79; --arena:#E9DCC5;
+  --fondo:#F7F4EC; --panel:#FFFFFF; --gris:#4A4F55;
+  --ink:#1B2321; --soft:#6C7571;
+  --linea:#DFD8C8; --linea-2:#C6BDA9;
+  --exito:#1F6B4A; --alerta:#8E3B2F;
+  --ui:'Figtree',system-ui,-apple-system,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+  background:var(--fondo); color:var(--ink); font-family:var(--ui);
+  min-height:100vh; font-size:15px; line-height:1.5; -webkit-font-smoothing:antialiased;
+}
+.rec *{box-sizing:border-box;}
+.rec button{font-family:inherit;cursor:pointer;}
+.rec input,.rec select,.rec textarea{font-family:inherit;font-size:14.5px;}
+.rec :focus-visible{outline:2px solid var(--verde);outline-offset:2px;}
+.rec h1,.rec h2,.rec h3{font-family:var(--ui);font-weight:700;line-height:1.15;margin:0;letter-spacing:-.011em;}
+.rec .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+.rec .num{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+
+/* ---------- estructura ---------- */
+.rec .wrap{max-width:1160px;margin:0 auto;padding:0 24px;}
+.rec .barra{background:var(--panel);border-bottom:1px solid var(--linea);}
+.rec .barra-in{max-width:1160px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:16px;}
+.rec .logo{height:34px;width:auto;display:block;flex:none;}
+.rec .barra-sep{width:1px;height:26px;background:var(--linea-2);flex:none;}
+.rec .programa{font-weight:600;font-size:16px;letter-spacing:-.01em;margin-right:auto;}
+.rec .quien{font-size:13.5px;color:var(--soft);}
+.rec .salir{background:var(--panel);border:1px solid var(--linea-2);color:var(--ink);padding:7px 13px;border-radius:2px;font-size:13px;font-weight:500;}
+.rec .salir:hover{border-color:var(--verde);color:var(--verde);}
+
+.rec .menu{background:var(--panel);border-bottom:1px solid var(--linea);overflow-x:auto;}
+.rec .menu-in{max-width:1160px;margin:0 auto;padding:0 24px;display:flex;width:100%;}
+.rec .menu button{background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-1px;padding:12px 16px;font-size:14px;font-weight:500;color:var(--soft);white-space:nowrap;}
+.rec .menu button:hover{color:var(--ink);}
+.rec .menu button[aria-current="true"]{color:var(--verde);font-weight:700;border-bottom-color:var(--oro);}
+
+/* ---------- tablero de saldo ---------- */
+.rec .tablero{background:var(--verde);color:#EDE7DA;border-radius:3px;margin:22px 0 20px;
+  display:grid;grid-template-columns:1.25fr 1fr;overflow:hidden;}
+.rec .tablero-main{padding:24px 26px 22px;border-right:1px solid rgba(233,220,197,.17);}
+.rec .rot{font-size:13px;color:#A9B5B0;display:block;margin-bottom:2px;}
+.rec .saldo-num{font-family:var(--mono);font-weight:600;font-size:clamp(46px,8vw,66px);
+  line-height:1;letter-spacing:-.035em;color:var(--oro-claro);}
+.rec .rail{margin-top:18px;}
+.rec .rail-barra{height:7px;background:rgba(233,220,197,.18);border-radius:1px;overflow:hidden;}
+.rec .rail-barra span{display:block;height:100%;background:var(--oro);border-radius:1px;}
+.rec .rail-txt{display:block;margin-top:8px;font-size:13px;color:#A9B5B0;}
+.rec .rail-txt b{color:#EDE7DA;font-weight:600;}
+.rec .tablero-datos{display:grid;margin:0;}
+.rec .tablero-datos > div{padding:15px 24px;border-bottom:1px solid rgba(233,220,197,.17);display:flex;justify-content:space-between;align-items:baseline;gap:14px;}
+.rec .tablero-datos > div:last-child{border-bottom:none;}
+.rec .tablero-datos dt{font-size:13.5px;color:#A9B5B0;margin:0;}
+.rec .tablero-datos dd{margin:0;font-family:var(--mono);font-size:19px;font-weight:500;}
+
+/* ---------- botones ---------- */
+.rec .b{border:1px solid var(--verde);background:var(--verde);color:#F7F4EC;padding:9px 16px;border-radius:2px;font-size:14px;font-weight:600;}
+.rec .b:hover{background:var(--verde-2);border-color:var(--verde-2);}
+.rec .b.oro{background:var(--oro);border-color:var(--oro);color:#241B06;}
+.rec .b.oro:hover{background:#9A7526;border-color:#9A7526;color:#fff;}
+.rec .b.hueco{background:var(--panel);color:var(--verde);border-color:var(--linea-2);}
+.rec .b.hueco:hover{background:var(--panel);border-color:var(--verde);}
+.rec .b.peligro{background:var(--panel);color:var(--alerta);border-color:#D9B6AE;}
+.rec .b.peligro:hover{background:var(--alerta);border-color:var(--alerta);color:#fff;}
+.rec .b.chico{padding:6px 11px;font-size:12.5px;}
+.rec .b:disabled{background:var(--panel);border-color:var(--linea);color:#A9A396;cursor:not-allowed;}
+.rec .b:disabled:hover{background:var(--panel);border-color:var(--linea);color:#A9A396;}
+
+/* ---------- paneles ---------- */
+.rec .bloque{background:var(--panel);border:1px solid var(--linea);border-radius:3px;padding:20px 22px;margin-bottom:16px;box-shadow:0 1px 2px rgba(6,48,43,.05);}
+.rec .bloque > h2{font-size:19px;margin-bottom:3px;}
+.rec .bloque > .pie{font-size:13.5px;color:var(--soft);margin:0 0 18px;max-width:72ch;}
+.rec .cifras{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(182px,1fr));margin-bottom:16px;}
+.rec .cifra{background:var(--panel);border:1px solid var(--linea);border-radius:3px;padding:15px 16px;box-shadow:0 1px 2px rgba(6,48,43,.05);}
+.rec .cifra b{display:block;font-family:var(--mono);font-size:27px;font-weight:500;line-height:1.05;letter-spacing:-.03em;margin-bottom:5px;color:var(--verde);}
+.rec .cifra span{font-size:13px;color:var(--soft);}
+.rec .cifra.ojo{border-left:3px solid var(--oro);}
+.rec .cifra.ojo b{color:var(--oro);}
+
+/* ---------- tablas ---------- */
+.rec .scroll{overflow-x:auto;}
+.rec table{width:100%;border-collapse:collapse;font-size:14px;}
+.rec th{text-align:left;font-size:12.5px;font-weight:600;color:#EDE7DA;background:var(--verde);padding:10px 12px;white-space:nowrap;}
+.rec td{padding:11px 12px;border-bottom:1px solid var(--linea);vertical-align:middle;}
+.rec tbody tr:last-child td{border-bottom:none;}
+.rec tbody tr:hover{background:#FBF9F3;}
+.rec .der{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;}
+.rec .mas{color:var(--exito);font-weight:600;}
+.rec .menos{color:var(--alerta);font-weight:600;}
+.rec .etq{display:inline-block;font-family:var(--mono);font-size:11.5px;font-weight:500;padding:2px 8px;border:1px solid;border-radius:2px;white-space:nowrap;}
+.rec .etq.esp{color:#8A6A1F;border-color:var(--oro-claro);background:#FBF4E4;}
+.rec .etq.list{color:var(--exito);border-color:#A8CDBA;background:#EFF7F2;}
+.rec .etq.no{color:var(--alerta);border-color:#D9B6AE;background:#FBF0ED;}
+.rec .etq.gris{color:var(--soft);border-color:var(--linea-2);background:#FAF8F2;}
+
+/* ---------- tarjetas de premio, con forma de etiqueta de despacho ---------- */
+.rec .tiquetes{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));}
+.rec .tk{background:var(--panel);border:1px solid var(--linea);border-radius:3px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 1px 2px rgba(6,48,43,.05);}
+.rec .tk-cab{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--linea);background:#FBF9F3;}
+.rec .tk-ref{font-size:11.5px;color:var(--soft);letter-spacing:.02em;}
+.rec .tk-cat{font-size:11.5px;color:var(--soft);}
+.rec .tk-img{height:124px;background:var(--fondo);border-bottom:1px solid var(--linea);display:grid;place-items:center;overflow:hidden;}
+.rec .tk-img svg{width:100%;height:100%;display:block;}
+.rec .tk-img img{width:100%;height:100%;object-fit:cover;display:block;}
+.rec .tk-texto{padding:14px 14px 12px;flex:1;}
+.rec .tk h3{font-size:16.5px;margin-bottom:5px;}
+.rec .tk p{margin:0;font-size:13.5px;color:var(--soft);}
+.rec .tk-campos{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--linea);}
+.rec .tk-campos > div{padding:9px 10px;border-right:1px solid var(--linea);}
+.rec .tk-campos > div:last-child{border-right:none;}
+.rec .tk-campos small{display:block;font-size:11px;color:var(--soft);margin-bottom:2px;}
+.rec .tk-campos b{font-family:var(--mono);font-size:14.5px;font-weight:500;color:var(--verde);}
+.rec .tk-accion{border-radius:0;border:none;border-top:1px solid var(--linea);width:100%;}
+.rec .tk.alcanza{border-color:var(--linea-2);box-shadow:inset 4px 0 0 var(--oro),0 1px 2px rgba(6,48,43,.06);}
+.rec .tk.alcanza .tk-campos b{color:var(--oro);}
+.rec .tk.agotado{opacity:.62;}
+.rec .falta{color:var(--soft);}
+
+/* ---------- formularios ---------- */
+.rec .campo{display:flex;flex-direction:column;gap:5px;margin-bottom:15px;}
+.rec .campo label{font-size:13.5px;font-weight:600;}
+.rec .campo input,.rec .campo select,.rec .campo textarea{padding:9px 11px;border:1px solid var(--linea-2);border-radius:2px;background:var(--panel);width:100%;color:var(--ink);}
+.rec .campo input:focus,.rec .campo select:focus,.rec .campo textarea:focus{border-color:var(--verde);}
+.rec .dos{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;}
+.rec .tres{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 18px;}
+.rec .gente{display:grid;gap:4px;grid-template-columns:repeat(auto-fill,minmax(216px,1fr));max-height:236px;overflow-y:auto;border:1px solid var(--linea-2);border-radius:2px;padding:10px 12px;background:var(--panel);}
+.rec .gente label{display:flex;align-items:center;gap:9px;font-size:14px;cursor:pointer;padding:4px 0;}
+.rec .gente label span{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--soft);}
+.rec .sugerido{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:15px;}
+.rec .sugerido button{border:1px solid var(--linea-2);background:var(--panel);padding:5px 12px;border-radius:2px;font-family:var(--mono);font-size:12.5px;color:var(--verde);}
+.rec .sugerido button:hover{border-color:var(--oro);background:#FBF4E4;}
+
+/* ---------- entrada ---------- */
+.rec .entrada{min-height:100vh;display:grid;place-items:center;padding:28px 20px;background:var(--fondo);}
+.rec .caja{width:min(420px,100%);}
+.rec .caja .logo{height:40px;margin:0 auto 26px;}
+.rec .caja h1{font-size:25px;margin-bottom:20px;text-align:center;}
+.rec .caja .form{background:var(--panel);border:1px solid var(--linea);border-radius:3px;padding:24px;box-shadow:0 2px 10px rgba(6,48,43,.07);}
+.rec .mal{color:var(--alerta);font-size:13.5px;font-weight:600;margin:0 0 12px;}
+.rec .claves{margin-top:18px;font-size:12.5px;color:var(--soft);border-top:1px solid var(--linea);padding-top:14px;line-height:1.6;}
+.rec .claves code{font-family:var(--mono);background:var(--fondo);border:1px solid var(--linea);padding:1px 5px;border-radius:2px;font-size:11.5px;}
+
+/* ---------- modal ---------- */
+.rec .velo{position:fixed;inset:0;background:rgba(10,30,27,.5);z-index:70;display:flex;align-items:flex-start;justify-content:center;padding:28px 16px;overflow:auto;}
+.rec .modal{background:var(--panel);border:1px solid var(--linea-2);border-radius:3px;width:min(600px,100%);box-shadow:0 10px 34px rgba(6,48,43,.2);}
+.rec .modal-cab{padding:16px 22px;border-bottom:1px solid var(--linea);display:flex;justify-content:space-between;align-items:center;gap:12px;}
+.rec .modal-cab h2{font-size:19px;}
+.rec .modal-cue{padding:22px;}
+.rec .modal-pie{padding:15px 22px;border-top:1px solid var(--linea);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;background:#FBF9F3;}
+.rec .equis{background:none;border:none;font-size:23px;line-height:1;color:var(--soft);padding:0 4px;}
+
+/* ---------- comprobante de canje ---------- */
+.rec .vale{border:1px solid var(--linea-2);border-radius:3px;overflow:hidden;background:var(--panel);}
+.rec .vale-cab{display:flex;justify-content:space-between;gap:12px;padding:9px 16px;background:var(--verde);color:#EDE7DA;font-family:var(--mono);font-size:11.5px;}
+.rec .vale-cue{padding:20px 16px 22px;text-align:center;}
+.rec .vale h3{font-size:17px;margin-bottom:16px;}
+.rec .barcode{width:100%;max-width:300px;height:58px;margin:0 auto;display:block;}
+.rec .vale .cod{font-family:var(--mono);font-size:25px;font-weight:600;letter-spacing:.22em;margin:10px 0 4px;color:var(--verde);}
+.rec .vale p{margin:0;color:var(--soft);font-size:13px;}
+
+/* ---------- auxiliares ---------- */
+.rec .nota{border:1px solid var(--linea-2);border-left:3px solid var(--oro);background:#FBF7EE;padding:13px 15px;border-radius:2px;font-size:13.5px;margin-bottom:16px;}
+.rec .nota b{display:block;margin-bottom:3px;}
+.rec .vacio{text-align:center;padding:42px 20px;color:var(--soft);font-size:14px;}
+.rec .vacio b{display:block;font-size:17px;font-weight:700;color:var(--ink);margin-bottom:6px;}
+.rec .aviso{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--verde);color:#EDE7DA;padding:11px 20px;border-radius:3px;font-size:14px;font-weight:500;z-index:90;box-shadow:0 6px 20px rgba(6,48,43,.28);}
+.rec .mini{width:52px;height:38px;background:var(--fondo);border:1px solid var(--linea);border-radius:2px;overflow:hidden;flex:none;}
+.rec .mini svg,.rec .mini img{width:100%;height:100%;object-fit:cover;display:block;}
+.rec .iconos{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;}
+.rec .iconos button{border:1px solid var(--linea-2);background:var(--fondo);border-radius:2px;padding:0;overflow:hidden;display:block;}
+.rec .iconos button svg{width:100%;height:54px;display:block;}
+.rec .iconos button small{display:block;font-size:10.5px;font-weight:500;padding:4px 3px;background:var(--panel);border-top:1px solid var(--linea);line-height:1.2;color:var(--soft);}
+.rec .iconos button[aria-pressed="true"]{border-color:var(--oro);box-shadow:inset 0 0 0 1px var(--oro);}
+.rec .iconos button[aria-pressed="true"] small{color:var(--ink);font-weight:600;}
+.rec .previa{width:168px;height:116px;background:var(--fondo);border:1px solid var(--linea-2);border-radius:2px;overflow:hidden;flex:none;}
+.rec .previa svg,.rec .previa img{width:100%;height:100%;object-fit:cover;display:block;}
+.rec .barras-cat{margin-bottom:13px;}
+.rec .barras-cat .fila{display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:5px;}
+.rec .barras-cat .pista{height:9px;background:var(--fondo);border:1px solid var(--linea);border-radius:1px;overflow:hidden;}
+.rec .barras-cat .pista span{display:block;height:100%;background:var(--oro);}
+
+@media (max-width:820px){
+  .rec .tablero{grid-template-columns:1fr;}
+  .rec .tablero-main{border-right:none;border-bottom:1px solid rgba(233,220,197,.17);}
+}
+@media (max-width:620px){
+  .rec .dos,.rec .tres{grid-template-columns:1fr;}
+  .rec .tiquetes{grid-template-columns:1fr;}
+  .rec .programa{font-size:14px;}
+  .rec .logo{height:28px;}
+}
+@media (prefers-reduced-motion:reduce){ .rec *{transition:none!important;animation:none!important;} }
+`;
+
+/* ====================== utilidades ====================== */
+
+const hash = (t) => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0; return String(h); };
+const id = () => Math.random().toString(36).slice(2, 10);
+/* Separador de miles con punto, como se escribe en Costa Rica. */
+const miles = (n) => {
+  const x = Math.round(Number(n) || 0);
+  return (x < 0 ? "-" : "") + Math.abs(x).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+};
+const hoy = () => new Date().toISOString().slice(0, 10);
+const fecha = (iso) => new Date(iso).toLocaleDateString("es-CR", { day: "2-digit", month: "short", year: "2-digit" });
+const fechaHora = (iso) => new Date(iso).toLocaleDateString("es-CR", { day: "2-digit", month: "short" }) + ", " +
+  new Date(iso).toLocaleTimeString("es-CR", { hour: "2-digit", minute: "2-digit" });
+
+const codigo = () => {
+  const letras = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let c = "";
+  for (let i = 0; i < 6; i++) c += letras[Math.floor(Math.random() * letras.length)];
+  return c.slice(0, 3) + "-" + c.slice(3);
+};
+
+const csv = (nombre, filas) => {
+  const t = filas.map((f) => f.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob(["\ufeff" + t], { type: "text/csv;charset=utf-8;" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = nombre; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+};
+
+/** Reduce la foto a 700 px y la comprime, para que quepa en el almacenamiento. */
+const comprimirImagen = (file) =>
+  new Promise((ok, mal) => {
+    const fr = new FileReader();
+    fr.onerror = () => mal(new Error("lectura"));
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = () => mal(new Error("imagen"));
+      im.onload = () => {
+        const max = 700;
+        const esc = Math.min(1, max / Math.max(im.width, im.height));
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(im.width * esc);
+        cv.height = Math.round(im.height * esc);
+        const cx = cv.getContext("2d");
+        cx.fillStyle = "var(--arena-claro)";
+        cx.fillRect(0, 0, cv.width, cv.height);
+        cx.drawImage(im, 0, 0, cv.width, cv.height);
+        ok(cv.toDataURL("image/jpeg", 0.74));
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+
+/* ====================== ilustraciones de premio ======================
+   Formas planas a dos tintas, como una impresión risográfica. Son
+   genéricas a propósito: no reproducen logos ni marcas de terceros.
+   ==================================================================== */
+
+const R = "#AF862E", A = "#10564A", N = "#06302B", P = "#FDFBF7";
+/* Antes se sobreimprimían las tintas; con verde y dorado el dorado se perdía,
+   así que la segunda tinta va encima, sin mezclarse. */
+const mult = {};
+
+const FIGURAS = {
+  "curso-datos": (
+    <g>
+      <rect x="26" y="60" width="21" height="36" fill={A} />
+      <rect x="54" y="44" width="21" height="52" fill={A} />
+      <rect x="82" y="28" width="21" height="68" fill={A} />
+      <path d="M30 54 L64 38 L92 20 L126 32" fill="none" stroke={R} strokeWidth="5" strokeLinejoin="round" style={mult} />
+      <circle cx="126" cy="32" r="9" fill={R} style={mult} />
+      <rect x="18" y="96" width="124" height="4" fill={N} />
+    </g>
+  ),
+  "curso-apps": (
+    <g>
+      <rect x="20" y="18" width="34" height="32" rx="7" fill={A} />
+      <rect x="63" y="58" width="34" height="32" rx="7" fill={A} />
+      <rect x="106" y="18" width="34" height="32" rx="7" fill={R} style={mult} />
+      <path d="M54 34 H106" stroke={N} strokeWidth="3" />
+      <path d="M37 50 V74 H63" stroke={N} strokeWidth="3" fill="none" />
+      <path d="M123 50 V74 H97" stroke={N} strokeWidth="3" fill="none" />
+    </g>
+  ),
+  "curso-excel": (
+    <g>
+      <rect x="22" y="20" width="116" height="72" fill={P} stroke={N} strokeWidth="3" />
+      <rect x="22" y="20" width="116" height="17" fill={A} />
+      <rect x="61" y="55" width="38" height="18" fill={R} style={mult} />
+      <path d="M22 37 H138 M22 55 H138 M22 73 H138 M61 20 V92 M99 20 V92" stroke={N} strokeWidth="2" />
+    </g>
+  ),
+  "curso-idioma": (
+    <g>
+      <rect x="14" y="16" width="72" height="44" rx="9" fill={A} />
+      <polygon points="28,60 28,78 46,60" fill={A} />
+      <rect x="74" y="46" width="72" height="44" rx="9" fill={R} style={mult} />
+      <polygon points="132,90 132,106 114,90" fill={R} style={mult} />
+    </g>
+  ),
+  tarjeta: (
+    <g>
+      <rect x="18" y="28" width="124" height="58" rx="6" fill={A} />
+      <rect x="72" y="28" width="16" height="58" fill={R} style={mult} />
+      <rect x="18" y="49" width="124" height="16" fill={R} style={mult} />
+      <circle cx="68" cy="57" r="11" fill="none" stroke={N} strokeWidth="3" />
+      <circle cx="92" cy="57" r="11" fill="none" stroke={N} strokeWidth="3" />
+    </g>
+  ),
+  cena: (
+    <g>
+      <circle cx="80" cy="56" r="34" fill={A} />
+      <circle cx="80" cy="56" r="20" fill="none" stroke={N} strokeWidth="3" />
+      <g style={mult} fill={R}>
+        <rect x="24" y="16" width="4" height="22" />
+        <rect x="32" y="16" width="4" height="22" />
+        <rect x="40" y="16" width="4" height="22" />
+        <rect x="26" y="36" width="16" height="10" rx="3" />
+        <rect x="31" y="44" width="6" height="52" />
+        <path d="M126 16 q12 16 6 34 h-12 z" />
+        <rect x="123" y="48" width="6" height="48" />
+      </g>
+    </g>
+  ),
+  estadio: (
+    <g>
+      <ellipse cx="80" cy="68" rx="58" ry="27" fill={A} />
+      <ellipse cx="80" cy="68" rx="31" ry="13" fill={N} />
+      <rect x="116" y="22" width="6" height="34" fill={N} />
+      <rect x="104" y="12" width="31" height="13" rx="2" fill={R} style={mult} />
+      <path d="M100 20 L84 30 M102 28 L88 40" stroke={R} strokeWidth="3" style={mult} />
+    </g>
+  ),
+  tiempo: (
+    <g>
+      <rect x="24" y="28" width="112" height="66" rx="5" fill={A} />
+      <rect x="24" y="28" width="112" height="15" fill={N} />
+      <rect x="45" y="17" width="7" height="19" rx="3.5" fill={N} />
+      <rect x="108" y="17" width="7" height="19" rx="3.5" fill={N} />
+      <circle cx="101" cy="70" r="18" fill={R} style={mult} />
+      <path d="M38 56 H70 M38 70 H62 M38 84 H54" stroke={P} strokeWidth="4" />
+    </g>
+  ),
+  mercancia: (
+    <g>
+      <path d="M58 18 L28 36 L43 55 L54 48 V94 H106 V48 L117 55 L132 36 L102 18 L93 27 C86 35 74 35 67 27 Z" fill={A} />
+      <rect x="54" y="68" width="52" height="9" fill={R} style={mult} />
+    </g>
+  ),
+  tecnologia: (
+    <g>
+      <path d="M32 72 V58 a48 48 0 0 1 96 0 V72" fill="none" stroke={A} strokeWidth="11" />
+      <rect x="21" y="62" width="23" height="36" rx="9" fill={A} />
+      <rect x="116" y="62" width="23" height="36" rx="9" fill={R} style={mult} />
+    </g>
+  ),
+  lugar: (
+    <g>
+      <rect x="50" y="14" width="60" height="58" rx="7" fill={A} />
+      <text x="80" y="59" textAnchor="middle" fontSize="44" fontWeight="800" fill={P}
+        fontFamily="'Bricolage Grotesque',system-ui,sans-serif">P</text>
+      <rect x="76" y="72" width="8" height="26" fill={N} />
+      <rect x="56" y="96" width="48" height="7" fill={R} style={mult} />
+    </g>
+  ),
+  libro: (
+    <g>
+      <path d="M80 32 C66 22 42 22 24 28 V88 C42 82 66 82 80 92 Z" fill={A} />
+      <path d="M80 32 C94 22 118 22 136 28 V88 C118 82 94 82 80 92 Z" fill={R} style={mult} />
+      <rect x="77" y="32" width="6" height="60" fill={N} />
+    </g>
+  ),
+};
+
+const ICONOS = [
+  ["curso-datos", "Análisis de datos"],
+  ["curso-apps", "Aplicaciones"],
+  ["curso-excel", "Hojas de cálculo"],
+  ["curso-idioma", "Idiomas"],
+  ["libro", "Taller o libro"],
+  ["tarjeta", "Tarjeta de regalo"],
+  ["cena", "Cena"],
+  ["estadio", "Entradas o evento"],
+  ["tiempo", "Tiempo libre"],
+  ["lugar", "Parqueo o espacio"],
+  ["mercancia", "Mercancía"],
+  ["tecnologia", "Tecnología"],
+];
+
+function Ilustracion({ tipo }) {
+  return (
+    <svg viewBox="0 0 160 112" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      {FIGURAS[tipo] || FIGURAS.mercancia}
+    </svg>
+  );
+}
+
+function Imagen({ premio, imgs }) {
+  const src = (imgs && imgs[premio.id]) || (premio.img || "").trim();
+  const [falla, setFalla] = useState(false);
+  useEffect(() => setFalla(false), [src]);
+  if (src && !falla) {
+    return <img src={src} alt={premio.nombre} loading="lazy" onError={() => setFalla(true)} />;
+  }
+  return <Ilustracion tipo={premio.icono} />;
+}
+
+/* ====================== datos de arranque ====================== */
+
+const CATEGORIAS = [
+  { nombre: "Quality Hero", sugerido: 200 },
+  { nombre: "Innovation Hero", sugerido: 300 },
+  { nombre: "Operational Excellence Hero", sugerido: 250 },
+  { nombre: "MVP", sugerido: 500 },
+];
+
+const PERSONAS = [
+  { id: "a1", usuario: "MSirias",    nombre: "M. Sirias",    puesto: "", depto: "", correo: "", rol: "admin",       clave: "admin123", activo: true },
+  { id: "a2", usuario: "MBarrantes", nombre: "M. Barrantes", puesto: "", depto: "", correo: "", rol: "admin",       clave: "admin123", activo: true },
+  { id: "u1", usuario: "JAcuña",     nombre: "J. Acuña",     puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
+  { id: "u2", usuario: "SSolis",     nombre: "S. Solís",     puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
+  { id: "u3", usuario: "MUreña",     nombre: "M. Ureña",     puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
+  { id: "u4", usuario: "ABrenes",    nombre: "A. Brenes",    puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
+  { id: "u5", usuario: "TMolina",    nombre: "T. Molina",    puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
+  { id: "u6", usuario: "YSoto",      nombre: "Y. Soto",      puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
+];
+
+const CATS_PREMIO = ["Capacitación", "Mercancía", "Tiempo", "Experiencia", "Tarjetas", "Tecnología"];
+
+const PREMIOS = [
+  { id: "p1", nombre: "Camiseta del equipo", desc: "Camiseta con el logo de la empresa, en su talla.", costo: 150, stock: 24, cat: "Mercancía", icono: "mercancia", img: "", activo: true },
+  { id: "p2", nombre: "Termo de acero", desc: "Termo de 750 ml con el logo de la empresa.", costo: 200, stock: 18, cat: "Mercancía", icono: "mercancia", img: "", activo: true },
+  { id: "p3", nombre: "Salida temprano un viernes", desc: "Se retira dos horas antes el viernes que escoja, coordinando con su jefatura.", costo: 300, stock: 40, cat: "Tiempo", icono: "tiempo", img: "", activo: true },
+  { id: "p4", nombre: "Tarjeta de regalo de ₡25.000", desc: "Canjeable en supermercados y tiendas por departamento.", costo: 600, stock: 10, cat: "Tarjetas", icono: "tarjeta", img: "", activo: true },
+  { id: "p5", nombre: "Cena para dos", desc: "Cena con un acompañante en uno de los restaurantes afiliados.", costo: 700, stock: 8, cat: "Experiencia", icono: "cena", img: "", activo: true },
+  { id: "p6", nombre: "Dos entradas al estadio", desc: "Par de entradas para un partido de la fecha que escoja, según disponibilidad.", costo: 800, stock: 6, cat: "Experiencia", icono: "estadio", img: "", activo: true },
+  { id: "p7", nombre: "Parqueo reservado por un mes", desc: "Espacio con su nombre junto a la entrada principal.", costo: 800, stock: 2, cat: "Experiencia", icono: "lugar", img: "", activo: true },
+  { id: "p8", nombre: "Curso de Excel avanzado", desc: "Tablas dinámicas, funciones de búsqueda y automatización de reportes. 20 horas.", costo: 900, stock: 10, cat: "Capacitación", icono: "curso-excel", img: "", activo: true },
+  { id: "p9", nombre: "Curso de Power BI", desc: "Modelado de datos y construcción de tableros. 24 horas, con certificado.", costo: 1200, stock: 8, cat: "Capacitación", icono: "curso-datos", img: "", activo: true },
+  { id: "p10", nombre: "Curso de Power Apps", desc: "Creación de aplicaciones internas sin programar. 24 horas, con certificado.", costo: 1200, stock: 8, cat: "Capacitación", icono: "curso-apps", img: "", activo: true },
+  { id: "p11", nombre: "Día libre adicional", desc: "Un día de vacaciones extra, coordinado con su jefatura.", costo: 1200, stock: 6, cat: "Tiempo", icono: "tiempo", img: "", activo: true },
+  { id: "p12", nombre: "Audífonos inalámbricos", desc: "Audífonos con cancelación de ruido.", costo: 1500, stock: 3, cat: "Tecnología", icono: "tecnologia", img: "", activo: true },
+  { id: "p13", nombre: "Un nivel de inglés", desc: "Un nivel completo en instituto afiliado, con examen de ubicación incluido.", costo: 1800, stock: 6, cat: "Capacitación", icono: "curso-idioma", img: "", activo: true },
+  { id: "p14", nombre: "Curso o taller a elección", desc: "Capacitación externa de hasta ₡80.000, en el tema que usted escoja.", costo: 2000, stock: 4, cat: "Capacitación", icono: "libro", img: "", activo: true },
+];
+
+function movimientosIniciales() {
+  const d = (dias) => new Date(Date.now() - dias * 86400000).toISOString();
+  const m = [
+    ["u1", 250, "Operational Excellence Hero", "Flujo de recibo", "Reorganizó el flujo de recibo y bajó el tiempo de descarga.", 42],
+    ["u1", 500, "MVP", "", "Sostuvo la operación completa durante la semana de inventario.", 10],
+    ["u2", 200, "Quality Hero", "", "Cero hallazgos en la auditoría de bodega.", 35],
+    ["u2", 300, "Innovation Hero", "Tablero de órdenes", "Propuso el tablero de seguimiento de órdenes abiertas.", 14],
+    ["u3", 200, "Quality Hero", "", "Detectó la discrepancia de lote antes del despacho.", 28],
+    ["u4", 250, "Operational Excellence Hero", "", "Automatizó el reporte semanal de faltantes.", 21],
+    ["u4", 200, "Quality Hero", "", "Corrigió el etiquetado de producto en tránsito.", 4],
+    ["u5", 300, "Innovation Hero", "Conteo cíclico", "Rediseñó el formato de conteo cíclico.", 18],
+    ["u5", 200, "Quality Hero", "", "Mantuvo la exactitud de inventario por encima del 99%.", 6],
+    ["u6", 500, "MVP", "", "Cubrió dos rutas críticas durante la temporada alta.", 9],
+  ];
+  return m.map(([persona, puntos, cat, proyecto, nota, dias]) => ({
+    id: id(), persona, tipo: "otorgado", puntos, cat, proyecto, nota,
+    fecha: d(dias), por: "a1",
+  })).sort((a, b) => b.fecha.localeCompare(a.fecha));
+}
+
+const CONFIG = {
+  programa: "Supply Master",
+  empresa: "",
+  vencen: false,
+  claves: {},
+};
+
+const LLAVE = "reconoce:datos:v1";
+const LLAVE_IMG = "reconoce:fotos:v1";
+
+/* ====================== piezas ====================== */
+
+/* Logotipo corporativo, incrustado para que la aplicación no dependa de un servidor de imágenes. */
+const LOGO = "data:image/png;base64,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";
+
+function Logo({ clase = "logo" }) {
+  return <img className={clase} src={LOGO} alt="Establishment Labs" />;
+}
+
+/* ---------- Código de barras Code 39 ----------
+   Tabla verificada contra la implementación de referencia de python-barcode.
+   n = elemento angosto, w = elemento ancho; las posiciones pares son barras. */
+const C39 = {
+  "0": "nnnwwnwnn", "1": "wnnwnnnnw", "2": "nnwwnnnnw", "3": "wnwwnnnnn", "4": "nnnwwnnnw",
+  "5": "wnnwwnnnn", "6": "nnwwwnnnn", "7": "nnnwnnwnw", "8": "wnnwnnwnn", "9": "nnwwnnwnn",
+  "A": "wnnnnwnnw", "B": "nnwnnwnnw", "C": "wnwnnwnnn", "D": "nnnnwwnnw", "E": "wnnnwwnnn",
+  "F": "nnwnwwnnn", "G": "nnnnnwwnw", "H": "wnnnnwwnn", "I": "nnwnnwwnn", "J": "nnnnwwwnn",
+  "K": "wnnnnnnww", "L": "nnwnnnnww", "M": "wnwnnnnwn", "N": "nnnnwnnww", "O": "wnnnwnnwn",
+  "P": "nnwnwnnwn", "Q": "nnnnnnwww", "R": "wnnnnnwwn", "S": "nnwnnnwwn", "T": "nnnnwnwwn",
+  "U": "wwnnnnnnw", "V": "nwwnnnnnw", "W": "wwwnnnnnn", "X": "nwnnwnnnw", "Y": "wwnnwnnnn",
+  "Z": "nwwnwnnnn", "-": "nwnnnnwnw", "*": "nwnnwnwnn",
+};
+
+function Barras({ valor, alto = 58 }) {
+  const limpio = String(valor || "").toUpperCase().replace(/[^0-9A-Z-]/g, "");
+  const cadena = "*" + limpio + "*";
+  const ANGOSTO = 2, ANCHO = 5, SEPARACION = 2;
+  const barras = [];
+  let x = 0, k = 0;
+  for (const ch of cadena) {
+    const patron = C39[ch];
+    if (!patron) continue;
+    for (let i = 0; i < patron.length; i++) {
+      const w = patron[i] === "w" ? ANCHO : ANGOSTO;
+      if (i % 2 === 0) barras.push(<rect key={k++} x={x} y="0" width={w} height={alto} />);
+      x += w;
+    }
+    x += SEPARACION;
+  }
+  if (!barras.length) return null;
+  return (
+    <svg className="barcode" viewBox={`0 0 ${x} ${alto}`} preserveAspectRatio="none"
+      role="img" aria-label={`Código ${limpio}`}>
+      <g fill="#06302B">{barras}</g>
+    </svg>
+  );
+}
+
+function Campo({ label, children }) {
+  return <div className="campo"><label>{label}</label>{children}</div>;
+}
+
+function Modal({ titulo, cerrar, children, pie, ancho }) {
+  useEffect(() => {
+    const esc = (e) => e.key === "Escape" && cerrar();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [cerrar]);
+  return (
+    <div className="velo" onMouseDown={(e) => e.target === e.currentTarget && cerrar()}>
+      <div className="modal" style={ancho ? { width: `min(${ancho}px,100%)` } : undefined}>
+        <div className="modal-cab">
+          <h2>{titulo}</h2>
+          <button className="equis" onClick={cerrar} aria-label="Cerrar">×</button>
+        </div>
+        <div className="modal-cue">{children}</div>
+        {pie && <div className="modal-pie">{pie}</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ====================== lógica de saldos ====================== */
+
+/* Referencia de catálogo: tres letras de la categoría más el costo, como un número de parte. */
+const refPremio = (p) =>
+  `${(p.cat || "GEN").replace(/[^A-Za-zÁÉÍÓÚÑ]/g, "").slice(0, 3).toUpperCase()}-${String(p.costo).padStart(4, "0")}`;
+
+const saldoDe = (datos, personaId) =>
+  datos.movimientos.filter((m) => m.persona === personaId).reduce((s, m) => s + m.puntos, 0);
+
+const ganadosDe = (datos, personaId) =>
+  datos.movimientos.filter((m) => m.persona === personaId && m.puntos > 0).reduce((s, m) => s + m.puntos, 0);
+
+/* ====================== entrada ====================== */
+
+function Entrada({ datos, entrar }) {
+  const [usuario, setUsuario] = useState("");
+  const [clave, setClave] = useState("");
+  const [mal, setMal] = useState("");
+  const ref = useRef(null);
+  useEffect(() => ref.current?.focus(), []);
+
+  const intentar = () => {
+    const u = datos.personas.find(
+      (p) => p.usuario.toLowerCase() === usuario.trim().toLowerCase() && p.activo
+    );
+    const esperado = u ? (datos.config.claves[u.id] || hash(u.clave)) : null;
+    if (!u || hash(clave) !== esperado) {
+      setMal("Usuario o contraseña incorrectos.");
+      setClave("");
+      return;
+    }
+    entrar(u);
+  };
+
+  return (
+    <div className="entrada">
+      <div className="caja">
+        <Logo />
+        <h1>{datos.config.programa}</h1>
+        <div className="form">
+          <Campo label="Usuario">
+            <input ref={ref} value={usuario} autoCapitalize="none"
+              onChange={(e) => { setUsuario(e.target.value); setMal(""); }}
+              onKeyDown={(e) => e.key === "Enter" && intentar()} />
+          </Campo>
+          <Campo label="Contraseña">
+            <input type="password" value={clave}
+              onChange={(e) => { setClave(e.target.value); setMal(""); }}
+              onKeyDown={(e) => e.key === "Enter" && intentar()} />
+          </Campo>
+          {mal && <p className="mal">{mal}</p>}
+          <button className="b oro" style={{ width: "100%" }} onClick={intentar}>Entrar</button>
+          <div className="claves">
+            Para la demostración: <code>MSirias</code> o <code>MBarrantes</code> con <code>admin123</code>.
+            Los demás entran con su usuario y <code>clave123</code>.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ====================== vista del colaborador ====================== */
+
+function MiSaldo({ datos, imgs, yo, canjear, avisar }) {
+  const [confirmar, setConfirmar] = useState(null);
+  const [vale, setVale] = useState(null);
+
+  const saldo = saldoDe(datos, yo.id);
+  const ganados = ganadosDe(datos, yo.id);
+  const mis = datos.movimientos.filter((m) => m.persona === yo.id);
+  const premios = datos.premios.filter((p) => p.activo).sort((a, b) => a.costo - b.costo);
+  const canjeados = ganados - saldo;
+  const alcanzables = premios.filter((p) => p.stock > 0 && p.costo <= saldo).length;
+  const siguiente = premios.find((p) => p.costo > saldo) || null;
+
+  const hacerCanje = () => {
+    const r = canjear(yo.id, confirmar.id);
+    setConfirmar(null);
+    if (r.error) return avisar(r.error);
+    setVale(r.canje);
+  };
+
+  return (
+    <>
+      <section className="tablero">
+        <div className="tablero-main">
+          <span className="rot">Puntos disponibles</span>
+          <div className="saldo-num">{miles(saldo)}</div>
+          {siguiente ? (
+            <div className="rail">
+              <div className="rail-barra">
+                <span style={{ width: `${Math.min(100, Math.round((saldo / siguiente.costo) * 100))}%` }} />
+              </div>
+              <span className="rail-txt">
+                Le faltan <b>{miles(siguiente.costo - saldo)}</b> puntos para {siguiente.nombre}
+              </span>
+            </div>
+          ) : (
+            <div className="rail">
+              <span className="rail-txt">
+                {alcanzables > 0
+                  ? "Alcanza todos los premios del catálogo."
+                  : "Cuando le asignen puntos los verá aquí."}
+              </span>
+            </div>
+          )}
+        </div>
+        <dl className="tablero-datos">
+          <div><dt>Ganados en total</dt><dd>{miles(ganados)}</dd></div>
+          <div><dt>Ya canjeados</dt><dd>{miles(canjeados)}</dd></div>
+          <div><dt>Premios a su alcance</dt><dd>{alcanzables}</dd></div>
+        </dl>
+      </section>
+
+      <div className="bloque">
+        <h2>Premios</h2>
+        <p className="pie">Los que están resaltados ya los alcanza con su saldo actual.</p>
+        <div className="tiquetes">
+          {premios.map((p) => {
+            const agotado = p.stock <= 0;
+            const alcanza = !agotado && saldo >= p.costo;
+            return (
+              <article key={p.id} className={`tk ${agotado ? "agotado" : alcanza ? "alcanza" : ""}`}>
+                <header className="tk-cab">
+                  <span className="tk-ref mono">{refPremio(p)}</span>
+                  <span className="tk-cat">{p.cat}</span>
+                </header>
+                <div className="tk-img"><Imagen premio={p} imgs={imgs} /></div>
+                <div className="tk-texto">
+                  <h3>{p.nombre}</h3>
+                  <p>{p.desc}</p>
+                </div>
+                <div className="tk-campos">
+                  <div><small>Puntos</small><b>{miles(p.costo)}</b></div>
+                  <div><small>Existencias</small><b>{p.stock}</b></div>
+                  <div>
+                    <small>Su saldo</small>
+                    <b className={agotado || alcanza ? "" : "falta"}>
+                      {agotado ? "—" : alcanza ? "Alcanza" : `−${miles(p.costo - saldo)}`}
+                    </b>
+                  </div>
+                </div>
+                <button className="b oro tk-accion" disabled={!alcanza} onClick={() => setConfirmar(p)}>
+                  {agotado ? "Sin existencias" : alcanza ? "Canjear" : "Puntos insuficientes"}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="bloque">
+        <h2>Mis movimientos</h2>
+        <p className="pie">Todo lo que ha entrado y salido de su saldo.</p>
+        {mis.length === 0 ? (
+          <div className="vacio"><b>Todavía sin movimientos</b>Cuando le asignen puntos aparecerán aquí.</div>
+        ) : (
+          <div className="scroll">
+            <table>
+              <thead><tr><th>Fecha</th><th>Motivo</th><th>Categoría</th><th className="der">Puntos</th></tr></thead>
+              <tbody>
+                {mis.map((m) => (
+                  <tr key={m.id}>
+                    <td style={{ whiteSpace: "nowrap", color: "var(--soft)" }}>{fecha(m.fecha)}</td>
+                    <td>
+                      {m.nota || (m.tipo === "canje" ? "Canje de premio" : "Ajuste")}
+                      {m.proyecto && <div style={{ fontSize: 12.5, color: "var(--soft)" }}>{m.proyecto}</div>}
+                    </td>
+                    <td>{m.cat ? <span className="etq gris">{m.cat}</span> : ""}</td>
+                    <td className={`der ${m.puntos > 0 ? "mas" : "menos"}`}>
+                      {m.puntos > 0 ? "+" : ""}{miles(m.puntos)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {confirmar && (
+        <Modal titulo="Confirmar el canje" cerrar={() => setConfirmar(null)}
+          pie={<>
+            <button className="b hueco" onClick={() => setConfirmar(null)}>Cancelar</button>
+            <button className="b oro" onClick={hacerCanje}>Canjear {miles(confirmar.costo)} puntos</button>
+          </>}>
+          <p style={{ marginTop: 0 }}>
+            Va a canjear <b>{confirmar.nombre}</b> por {miles(confirmar.costo)} puntos.
+            Le quedarían {miles(saldo - confirmar.costo)}.
+          </p>
+          <p style={{ marginBottom: 0, color: "var(--soft)", fontSize: 14 }}>
+            Los puntos se descuentan de inmediato y el premio queda apartado. Coordinación le confirma
+            cuándo retirarlo. Si por alguna razón no se puede entregar, los puntos regresan a su saldo.
+          </p>
+        </Modal>
+      )}
+
+      {vale && (
+        <Modal titulo="Canje registrado" cerrar={() => setVale(null)}
+          pie={<button className="b oro" onClick={() => setVale(null)}>Listo</button>}>
+          <div className="vale">
+            <div className="vale-cab">
+              <span>Comprobante de canje</span>
+              <span>{fecha(vale.fecha)}</span>
+            </div>
+            <div className="vale-cue">
+              <h3>{vale.premioNombre}</h3>
+              <Barras valor={vale.codigo} />
+              <div className="cod">{vale.codigo}</div>
+              <p>Presente este código cuando retire su premio.</p>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+function MisCanjes({ datos, yo }) {
+  const mis = datos.canjes.filter((c) => c.persona === yo.id);
+  const etq = (e) => (e === "Entregado" ? "list" : e === "Rechazado" ? "no" : "esp");
+  return (
+    <div className="bloque">
+      <h2>Mis canjes</h2>
+      <p className="pie">Premios que ha pedido y en qué estado van.</p>
+      {mis.length === 0 ? (
+        <div className="vacio"><b>Sin canjes todavía</b>Cuando canjee un premio aparecerá aquí con su código.</div>
+      ) : (
+        <div className="scroll">
+          <table>
+            <thead><tr><th>Código</th><th>Premio</th><th>Fecha</th><th className="der">Puntos</th><th>Estado</th></tr></thead>
+            <tbody>
+              {mis.map((c) => (
+                <tr key={c.codigo}>
+                  <td style={{ fontWeight: 700, letterSpacing: ".04em" }}>{c.codigo}</td>
+                  <td>{c.premioNombre}</td>
+                  <td style={{ whiteSpace: "nowrap", color: "var(--soft)" }}>{fecha(c.fecha)}</td>
+                  <td className="der">{miles(c.costo)}</td>
+                  <td><span className={`etq ${etq(c.estado)}`}>{c.estado}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ====================== otorgar puntos ====================== */
+
+function Otorgar({ datos, otorgar, avisar }) {
+  const [sel, setSel] = useState([]);
+  const [cat, setCat] = useState(CATEGORIAS[0].nombre);
+  const [puntos, setPuntos] = useState(CATEGORIAS[0].sugerido);
+  const [proyecto, setProyecto] = useState("");
+  const [nota, setNota] = useState("");
+  const [busca, setBusca] = useState("");
+
+  const gente = datos.personas.filter(
+    (p) => p.rol === "colaborador" && p.activo &&
+      (!busca.trim() || `${p.nombre} ${p.depto} ${p.puesto}`.toLowerCase().includes(busca.toLowerCase()))
+  );
+
+  const alternar = (pid) =>
+    setSel((s) => (s.includes(pid) ? s.filter((x) => x !== pid) : [...s, pid]));
+
+  const elegirCat = (c) => { setCat(c.nombre); setPuntos(c.sugerido); };
+
+  const enviar = () => {
+    const n = Number(puntos);
+    if (sel.length === 0) return avisar("Escoja al menos una persona");
+    if (!n || n <= 0) return avisar("Los puntos deben ser mayores que cero");
+    if (!nota.trim()) return avisar("Escriba el motivo del reconocimiento");
+    otorgar({ personas: sel, puntos: n, cat, proyecto: proyecto.trim(), nota: nota.trim() });
+    avisar(`${miles(n)} puntos para ${sel.length} ${sel.length === 1 ? "persona" : "personas"}`);
+    setSel([]); setProyecto(""); setNota("");
+  };
+
+  return (
+    <div className="bloque">
+      <h2>Otorgar puntos</h2>
+      <p className="pie">Cada asignación queda registrada con su motivo, para que después se pueda explicar.</p>
+
+      <Campo label="¿A quién?">
+        <input value={busca} onChange={(e) => setBusca(e.target.value)}
+          placeholder="Filtrar por nombre, puesto o departamento" />
+      </Campo>
+      <div className="gente">
+        {gente.map((p) => (
+          <label key={p.id}>
+            <input type="checkbox" checked={sel.includes(p.id)} onChange={() => alternar(p.id)} />
+            {p.nombre}
+            <span>{miles(saldoDe(datos, p.id))}</span>
+          </label>
+        ))}
+        {gente.length === 0 && <span style={{ color: "var(--soft)", fontSize: 14 }}>Nadie coincide con ese filtro.</span>}
+      </div>
+      <p style={{ fontSize: 13.5, color: "var(--soft)", margin: "8px 0 16px" }}>
+        {sel.length === 0 ? "Nadie seleccionado todavía." : `${sel.length} seleccionada${sel.length === 1 ? "" : "s"}.`}
+      </p>
+
+      <Campo label="¿Por qué? Escoja la categoría">
+        <select value={cat} onChange={(e) => elegirCat(CATEGORIAS.find((c) => c.nombre === e.target.value))}>
+          {CATEGORIAS.map((c) => <option key={c.nombre}>{c.nombre}</option>)}
+        </select>
+      </Campo>
+
+      <div className="dos">
+        <Campo label="Puntos por persona">
+          <input type="number" value={puntos} min="1" onChange={(e) => setPuntos(e.target.value)} />
+        </Campo>
+        <Campo label="Proyecto o iniciativa (opcional)">
+          <input value={proyecto} onChange={(e) => setProyecto(e.target.value)} placeholder="Migración de inventario" />
+        </Campo>
+      </div>
+      <div className="sugerido">
+        {[50, 100, 150, 250, 500].map((n) => (
+          <button key={n} onClick={() => setPuntos(n)}>{n}</button>
+        ))}
+      </div>
+
+      <Campo label="Motivo, en una frase">
+        <textarea rows={3} value={nota} onChange={(e) => setNota(e.target.value)}
+          placeholder="Propuso el cambio que bajó el tiempo de despacho de 40 a 22 minutos." />
+      </Campo>
+
+      <button className="b oro" onClick={enviar}>
+        Otorgar {sel.length > 0 && Number(puntos) > 0
+          ? `${miles(Number(puntos) * sel.length)} puntos en total`
+          : "puntos"}
+      </button>
+    </div>
+  );
+}
+
+/* ====================== resumen ====================== */
+
+function Resumen({ datos, ir }) {
+  const mes = hoy().slice(0, 7);
+  const otorgados = datos.movimientos.filter((m) => m.puntos > 0);
+  const delMes = otorgados.filter((m) => m.fecha.slice(0, 7) === mes);
+  const pendientes = datos.canjes.filter((c) => c.estado === "Pendiente");
+  const circulacion = datos.personas
+    .filter((p) => p.rol === "colaborador")
+    .reduce((s, p) => s + saldoDe(datos, p.id), 0);
+  const sinStock = datos.premios.filter((p) => p.activo && p.stock <= 0);
+
+  const porCategoria = CATEGORIAS.map((c) => ({
+    nombre: c.nombre,
+    total: otorgados.filter((m) => m.cat === c.nombre).reduce((s, m) => s + m.puntos, 0),
+  })).filter((c) => c.total > 0).sort((a, b) => b.total - a.total);
+  const mayor = porCategoria[0]?.total || 1;
+
+  return (
+    <>
+      <div className="cifras">
+        <div className="cifra"><b className="num">{miles(delMes.reduce((s, m) => s + m.puntos, 0))}</b><span>puntos otorgados este mes</span></div>
+        <div className="cifra ojo"><b className="num">{pendientes.length}</b><span>canjes esperando entrega</span></div>
+        <div className="cifra"><b className="num">{miles(circulacion)}</b><span>puntos sin canjear en manos del equipo</span></div>
+        <div className="cifra"><b className="num">{datos.personas.filter((p) => p.rol === "colaborador" && p.activo).length}</b><span>personas en el programa</span></div>
+      </div>
+
+      {pendientes.length > 0 && (
+        <div className="bloque">
+          <h2>Canjes por entregar</h2>
+          <p className="pie">Los puntos ya se descontaron. Falta hacer llegar el premio.</p>
+          {pendientes.slice(0, 6).map((c) => {
+            const p = datos.personas.find((x) => x.id === c.persona);
+            return (
+              <div key={c.codigo} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "10px 0", borderBottom: "1px solid #DFD4BE", fontSize: 14.5 }}>
+                <span><b style={{ letterSpacing: ".04em" }}>{c.codigo}</b> · {p?.nombre}</span>
+                <span style={{ color: "var(--soft)" }}>{c.premioNombre}</span>
+              </div>
+            );
+          })}
+          <button className="b hueco chico" style={{ marginTop: 14 }} onClick={() => ir("canjes")}>Ver todos los canjes</button>
+        </div>
+      )}
+
+      <div className="bloque">
+        <h2>Por qué se están dando los puntos</h2>
+        <p className="pie">Si una sola categoría se lleva todo, el programa está premiando una sola cosa.</p>
+        {porCategoria.length === 0 ? (
+          <div className="vacio"><b>Sin datos todavía</b>Otorgue los primeros puntos para ver el reparto.</div>
+        ) : porCategoria.map((c) => (
+          <div key={c.nombre} className="barras-cat">
+            <div className="fila">
+              <span>{c.nombre}</span>
+              <span className="mono" style={{ fontWeight: 600 }}>{miles(c.total)}</span>
+            </div>
+            <div className="pista">
+              <span style={{ width: `${(c.total / mayor) * 100}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {sinStock.length > 0 && (
+        <div className="nota">
+          <b>Premios agotados</b>
+          {sinStock.map((p) => p.nombre).join(", ")}. Siguen visibles en el catálogo pero nadie puede canjearlos.
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ====================== personas ====================== */
+
+const PERSONA_VACIA = {
+  usuario: "", nombre: "", puesto: "", depto: "", correo: "",
+  rol: "colaborador", clave: "clave123", activo: true,
+};
+
+function Personas({ datos, setDatos, avisar }) {
+  const [edita, setEdita] = useState(null);
+  const [busca, setBusca] = useState("");
+  const [detalle, setDetalle] = useState(null);
+
+  const lista = datos.personas.filter(
+    (p) => !busca.trim() || `${p.nombre} ${p.usuario} ${p.depto} ${p.puesto}`.toLowerCase().includes(busca.toLowerCase())
+  );
+
+  const guardar = () => {
+    const p = { ...edita, usuario: edita.usuario.trim().toLowerCase() };
+    if (!p.nombre.trim() || !p.usuario) return avisar("Falta el nombre o el usuario");
+    const repetido = datos.personas.some((x) => x.usuario === p.usuario && x.id !== p.id);
+    if (repetido) return avisar("Ese usuario ya existe");
+    setDatos((d) => ({
+      ...d,
+      personas: p.id ? d.personas.map((x) => (x.id === p.id ? p : x)) : [...d.personas, { ...p, id: id() }],
+    }));
+    avisar(p.id ? "Cambios guardados" : `${p.nombre} agregada al programa`);
+    setEdita(null);
+  };
+
+  const exportar = () => csv("personas.csv", [
+    ["Usuario", "Nombre", "Puesto", "Departamento", "Correo", "Rol", "Activo", "Ganados", "Saldo"],
+    ...datos.personas.map((p) => [p.usuario, p.nombre, p.puesto, p.depto, p.correo, p.rol,
+      p.activo ? "Sí" : "No", ganadosDe(datos, p.id), saldoDe(datos, p.id)]),
+  ]);
+
+  return (
+    <div className="bloque">
+      <h2>Personas</h2>
+      <p className="pie">Quién participa, con qué usuario entra y cuántos puntos tiene.</p>
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+        <input value={busca} onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar por nombre, usuario o departamento"
+          style={{ flex: "1 1 240px", padding: "10px 11px", border: "2px solid var(--ink)", borderRadius: 2, background: "var(--card)" }} />
+        <button className="b hueco" onClick={exportar}>Exportar a Excel</button>
+        <button className="b oro" onClick={() => setEdita({ ...PERSONA_VACIA })}>Agregar persona</button>
+      </div>
+
+      <div className="scroll">
+        <table>
+          <thead><tr><th>Nombre</th><th>Usuario</th><th>Departamento</th><th className="der">Ganados</th><th className="der">Saldo</th><th>Estado</th><th></th></tr></thead>
+          <tbody>
+            {lista.map((p) => (
+              <tr key={p.id}>
+                <td>
+                  <b>{p.nombre}</b>
+                  <div style={{ fontSize: 12.5, color: "var(--soft)" }}>{p.puesto}</div>
+                </td>
+                <td>{p.usuario}{p.rol === "admin" && <div><span className="etq esp">Coordinación</span></div>}</td>
+                <td style={{ color: "var(--soft)" }}>{p.depto}</td>
+                <td className="der">{p.rol === "colaborador" ? miles(ganadosDe(datos, p.id)) : "—"}</td>
+                <td className="der"><b>{p.rol === "colaborador" ? miles(saldoDe(datos, p.id)) : "—"}</b></td>
+                <td>
+                  <button className={`etq ${p.activo ? "list" : "gris"}`} style={{ background: "none", cursor: "pointer" }}
+                    onClick={() => setDatos((d) => ({ ...d, personas: d.personas.map((x) => x.id === p.id ? { ...x, activo: !x.activo } : x) }))}>
+                    {p.activo ? "Activa" : "Inactiva"}
+                  </button>
+                </td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  {p.rol === "colaborador" && (
+                    <button className="b hueco chico" onClick={() => setDetalle(p)}>Historial</button>
+                  )}{" "}
+                  <button className="b hueco chico" onClick={() => setEdita({ ...p })}>Editar</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {edita && (
+        <Modal titulo={edita.id ? "Editar persona" : "Agregar persona"} cerrar={() => setEdita(null)}
+          pie={<>
+            <button className="b hueco" onClick={() => setEdita(null)}>Cancelar</button>
+            <button className="b oro" onClick={guardar}>Guardar</button>
+          </>}>
+          <Campo label="Nombre completo">
+            <input value={edita.nombre} onChange={(e) => setEdita({ ...edita, nombre: e.target.value })} />
+          </Campo>
+          <div className="dos">
+            <Campo label="Usuario para entrar">
+              <input value={edita.usuario} autoCapitalize="none"
+                onChange={(e) => setEdita({ ...edita, usuario: e.target.value })} placeholder="mrojas" />
+            </Campo>
+            <Campo label="Contraseña inicial">
+              <input value={edita.clave} onChange={(e) => setEdita({ ...edita, clave: e.target.value })} />
+            </Campo>
+          </div>
+          <div className="dos">
+            <Campo label="Puesto">
+              <input value={edita.puesto} onChange={(e) => setEdita({ ...edita, puesto: e.target.value })} />
+            </Campo>
+            <Campo label="Departamento">
+              <input value={edita.depto} onChange={(e) => setEdita({ ...edita, depto: e.target.value })} />
+            </Campo>
+          </div>
+          <div className="dos">
+            <Campo label="Correo">
+              <input value={edita.correo} onChange={(e) => setEdita({ ...edita, correo: e.target.value })} />
+            </Campo>
+            <Campo label="Rol">
+              <select value={edita.rol} onChange={(e) => setEdita({ ...edita, rol: e.target.value })}>
+                <option value="colaborador">Colaborador</option>
+                <option value="admin">Coordinación</option>
+              </select>
+            </Campo>
+          </div>
+          <p style={{ fontSize: 13.5, color: "var(--soft)", margin: 0 }}>
+            Coordinación puede otorgar puntos, administrar premios y entregar canjes. Un colaborador
+            solo ve su propio saldo y el catálogo.
+          </p>
+        </Modal>
+      )}
+
+      {detalle && (
+        <Modal titulo={detalle.nombre} cerrar={() => setDetalle(null)} ancho={640}
+          pie={<button className="b hueco" onClick={() => setDetalle(null)}>Cerrar</button>}>
+          <div className="cifras" style={{ marginBottom: 16 }}>
+            <div className="cifra"><b className="num">{miles(saldoDe(datos, detalle.id))}</b><span>saldo actual</span></div>
+            <div className="cifra"><b className="num">{miles(ganadosDe(datos, detalle.id))}</b><span>ganados en total</span></div>
+          </div>
+          <div className="scroll">
+            <table>
+              <thead><tr><th>Fecha</th><th>Motivo</th><th className="der">Puntos</th></tr></thead>
+              <tbody>
+                {datos.movimientos.filter((m) => m.persona === detalle.id).map((m) => (
+                  <tr key={m.id}>
+                    <td style={{ whiteSpace: "nowrap", color: "var(--soft)" }}>{fecha(m.fecha)}</td>
+                    <td>{m.nota || (m.tipo === "canje" ? "Canje de premio" : "Ajuste")}</td>
+                    <td className={`der ${m.puntos > 0 ? "mas" : "menos"}`}>{m.puntos > 0 ? "+" : ""}{miles(m.puntos)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ====================== premios ====================== */
+
+const PREMIO_VACIO = { nombre: "", desc: "", costo: 100, stock: 1, cat: "Mercancía", icono: "mercancia", img: "", activo: true };
+
+function Premios({ datos, setDatos, imgs, setImgs, avisar }) {
+  const [edita, setEdita] = useState(null);
+  const [foto, setFoto] = useState(null);
+  const [borra, setBorra] = useState(null);
+  const archivo = useRef(null);
+
+  const abrir = (p) => {
+    setEdita(p ? { ...p } : { ...PREMIO_VACIO });
+    setFoto(p ? (imgs[p.id] || null) : null);
+  };
+
+  const subir = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > 8 * 1024 * 1024) return avisar("La foto pesa más de 8 MB");
+    try { setFoto(await comprimirImagen(f)); }
+    catch { avisar("No se pudo leer la foto"); }
+    e.target.value = "";
+  };
+
+  const guardar = () => {
+    const p = { ...edita, costo: Number(edita.costo) || 0, stock: Number(edita.stock) || 0 };
+    if (!p.nombre.trim()) return avisar("Falta el nombre del premio");
+    if (p.costo <= 0) return avisar("El costo en puntos debe ser mayor que cero");
+    const pid = p.id || id();
+    setDatos((d) => ({
+      ...d,
+      premios: p.id ? d.premios.map((x) => (x.id === pid ? p : x)) : [...d.premios, { ...p, id: pid }],
+    }));
+    setImgs((m) => { const n = { ...m }; if (foto) n[pid] = foto; else delete n[pid]; return n; });
+    avisar(p.id ? "Premio actualizado" : "Premio agregado al catálogo");
+    setEdita(null); setFoto(null);
+  };
+
+  const ajustar = (pid, n) =>
+    setDatos((d) => ({ ...d, premios: d.premios.map((p) => p.id === pid ? { ...p, stock: Math.max(0, p.stock + n) } : p) }));
+
+  return (
+    <div className="bloque">
+      <h2>Catálogo de premios</h2>
+      <p className="pie">Lo que el equipo puede pedir con sus puntos.</p>
+
+      <div style={{ marginBottom: 16 }}>
+        <button className="b oro" onClick={() => abrir(null)}>Agregar premio</button>
+      </div>
+
+      <div className="scroll">
+        <table>
+          <thead><tr><th></th><th>Premio</th><th>Categoría</th><th className="der">Puntos</th><th>Existencias</th><th>Estado</th><th></th></tr></thead>
+          <tbody>
+            {datos.premios.map((p) => (
+              <tr key={p.id}>
+                <td><div className="mini"><Imagen premio={p} imgs={imgs} /></div></td>
+                <td>
+                  <b>{p.nombre}</b>
+                  <div style={{ fontSize: 12.5, color: "var(--soft)", maxWidth: 340 }}>{p.desc}</div>
+                </td>
+                <td style={{ color: "var(--soft)" }}>{p.cat}</td>
+                <td className="der"><b>{miles(p.costo)}</b></td>
+                <td>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                    <button className="b hueco chico" onClick={() => ajustar(p.id, -1)} aria-label="Quitar uno">−</button>
+                    <b className="num" style={{ minWidth: 22, textAlign: "center", display: "inline-block" }}>{p.stock}</b>
+                    <button className="b hueco chico" onClick={() => ajustar(p.id, 1)} aria-label="Agregar uno">+</button>
+                    {p.stock === 0 && <span className="etq no">Agotado</span>}
+                  </span>
+                </td>
+                <td>
+                  <button className={`etq ${p.activo ? "list" : "gris"}`} style={{ background: "none", cursor: "pointer" }}
+                    onClick={() => setDatos((d) => ({ ...d, premios: d.premios.map((x) => x.id === p.id ? { ...x, activo: !x.activo } : x) }))}>
+                    {p.activo ? "En catálogo" : "Oculto"}
+                  </button>
+                </td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  <button className="b hueco chico" onClick={() => abrir(p)}>Editar</button>{" "}
+                  <button className="b peligro chico" onClick={() => setBorra(p)}>Eliminar</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {edita && (
+        <Modal titulo={edita.id ? "Editar premio" : "Nuevo premio"} cerrar={() => { setEdita(null); setFoto(null); }} ancho={680}
+          pie={<>
+            <button className="b hueco" onClick={() => { setEdita(null); setFoto(null); }}>Cancelar</button>
+            <button className="b oro" onClick={guardar}>Guardar</button>
+          </>}>
+          <Campo label="Nombre">
+            <input value={edita.nombre} onChange={(e) => setEdita({ ...edita, nombre: e.target.value })} />
+          </Campo>
+          <Campo label="Descripción, en una frase">
+            <textarea rows={2} value={edita.desc} onChange={(e) => setEdita({ ...edita, desc: e.target.value })} />
+          </Campo>
+          <div className="tres">
+            <Campo label="Costo en puntos">
+              <input type="number" value={edita.costo} onChange={(e) => setEdita({ ...edita, costo: e.target.value })} />
+            </Campo>
+            <Campo label="Existencias">
+              <input type="number" value={edita.stock} onChange={(e) => setEdita({ ...edita, stock: e.target.value })} />
+            </Campo>
+            <Campo label="Categoría">
+              <select value={edita.cat} onChange={(e) => setEdita({ ...edita, cat: e.target.value })}>
+                {CATS_PREMIO.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </Campo>
+          </div>
+
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>
+            <div className="previa">
+              {foto ? <img src={foto} alt="Vista previa" /> : <Ilustracion tipo={edita.icono} />}
+            </div>
+            <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+              <label style={{ fontSize: 13.5, fontWeight: 600, display: "block", marginBottom: 5 }}>Imagen</label>
+              <p style={{ fontSize: 13.5, color: "var(--soft)", margin: "0 0 10px" }}>
+                Suba una foto propia o deje la ilustración. Si sube foto, esa manda sobre la ilustración.
+              </p>
+              <input ref={archivo} type="file" accept="image/*" onChange={subir} style={{ display: "none" }} />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                <button className="b hueco chico" onClick={() => archivo.current?.click()}>Subir foto</button>
+                {foto && <button className="b peligro chico" onClick={() => setFoto(null)}>Quitar foto</button>}
+              </div>
+              <Campo label="O dirección de imagen (URL)">
+                <input value={edita.img} onChange={(e) => setEdita({ ...edita, img: e.target.value })}
+                  placeholder="https://…/premio.jpg" />
+              </Campo>
+            </div>
+          </div>
+
+          <label style={{ fontSize: 13.5, fontWeight: 600, display: "block", marginBottom: 7 }}>Ilustración</label>
+          <div className="iconos" style={{ marginBottom: 16 }}>
+            {ICONOS.map(([k, n]) => (
+              <button key={k} aria-pressed={edita.icono === k} title={n}
+                onClick={() => setEdita({ ...edita, icono: k })}>
+                <Ilustracion tipo={k} />
+                <small>{n}</small>
+              </button>
+            ))}
+          </div>
+
+          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14.5 }}>
+            <input type="checkbox" checked={edita.activo} onChange={(e) => setEdita({ ...edita, activo: e.target.checked })} />
+            Mostrar en el catálogo
+          </label>
+        </Modal>
+      )}
+
+      {borra && (
+        <Modal titulo="Eliminar premio" cerrar={() => setBorra(null)}
+          pie={<>
+            <button className="b hueco" onClick={() => setBorra(null)}>Cancelar</button>
+            <button className="b peligro" onClick={() => {
+              setDatos((d) => ({ ...d, premios: d.premios.filter((p) => p.id !== borra.id) }));
+              setImgs((m) => { const n = { ...m }; delete n[borra.id]; return n; });
+              avisar("Premio eliminado"); setBorra(null);
+            }}>Sí, eliminar</button>
+          </>}>
+          <p style={{ margin: 0 }}>
+            Va a sacar <b>{borra.nombre}</b> del catálogo de forma permanente. Los canjes ya hechos
+            conservan el nombre. Si solo quiere dejar de ofrecerlo, ocúltelo en lugar de eliminarlo.
+          </p>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ====================== canjes ====================== */
+
+function Canjes({ datos, entregar, rechazar, avisar }) {
+  const [filtro, setFiltro] = useState("Pendiente");
+  const [rechazando, setRechazando] = useState(null);
+  const [motivo, setMotivo] = useState("");
+
+  const lista = datos.canjes.filter((c) => filtro === "Todos" || c.estado === filtro);
+  const etq = (e) => (e === "Entregado" ? "list" : e === "Rechazado" ? "no" : "esp");
+
+  const exportar = () => csv("canjes.csv", [
+    ["Código", "Fecha", "Persona", "Premio", "Puntos", "Estado"],
+    ...datos.canjes.map((c) => [c.codigo, c.fecha,
+      datos.personas.find((p) => p.id === c.persona)?.nombre, c.premioNombre, c.costo, c.estado]),
+  ]);
+
+  return (
+    <div className="bloque">
+      <h2>Canjes</h2>
+      <p className="pie">Al entregar el premio, marque el canje. Si no se puede entregar, recháselo y los puntos vuelven.</p>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
+        {["Pendiente", "Entregado", "Rechazado", "Todos"].map((f) => (
+          <button key={f} className={`b ${filtro === f ? "oro" : "hueco"} chico`} onClick={() => setFiltro(f)}>{f}</button>
+        ))}
+        <button className="b hueco" style={{ marginLeft: "auto" }} onClick={exportar}>Exportar a Excel</button>
+      </div>
+
+      {lista.length === 0 ? (
+        <div className="vacio">
+          <b>Nada en {filtro.toLowerCase()}</b>
+          {filtro === "Pendiente" ? "No hay premios esperando entrega." : "Cambie el filtro para ver otros canjes."}
+        </div>
+      ) : (
+        <div className="scroll">
+          <table>
+            <thead><tr><th>Código</th><th>Persona</th><th>Premio</th><th>Fecha</th><th className="der">Puntos</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+              {lista.map((c) => {
+                const p = datos.personas.find((x) => x.id === c.persona);
+                return (
+                  <tr key={c.codigo}>
+                    <td style={{ fontWeight: 700, letterSpacing: ".04em" }}>{c.codigo}</td>
+                    <td>{p?.nombre}<div style={{ fontSize: 12.5, color: "var(--soft)" }}>{p?.depto}</div></td>
+                    <td>{c.premioNombre}</td>
+                    <td style={{ whiteSpace: "nowrap", color: "var(--soft)" }}>{fechaHora(c.fecha)}</td>
+                    <td className="der">{miles(c.costo)}</td>
+                    <td><span className={`etq ${etq(c.estado)}`}>{c.estado}</span></td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {c.estado === "Pendiente" && (
+                        <>
+                          <button className="b chico" onClick={() => { entregar(c.codigo); avisar(`${c.codigo} marcado como entregado`); }}>
+                            Entregado
+                          </button>{" "}
+                          <button className="b peligro chico" onClick={() => { setRechazando(c); setMotivo(""); }}>
+                            Rechazar
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {rechazando && (
+        <Modal titulo="Rechazar el canje" cerrar={() => setRechazando(null)}
+          pie={<>
+            <button className="b hueco" onClick={() => setRechazando(null)}>Cancelar</button>
+            <button className="b peligro" onClick={() => {
+              rechazar(rechazando.codigo, motivo.trim());
+              avisar(`Puntos devueltos a ${datos.personas.find((p) => p.id === rechazando.persona)?.nombre}`);
+              setRechazando(null);
+            }}>Rechazar y devolver puntos</button>
+          </>}>
+          <p style={{ marginTop: 0 }}>
+            Se devuelven {miles(rechazando.costo)} puntos y el premio regresa al inventario.
+            La persona verá el motivo en su historial.
+          </p>
+          <Campo label="Motivo">
+            <textarea rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)}
+              placeholder="El proveedor no tiene existencias hasta el próximo mes." />
+          </Campo>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+/* ====================== ajustes ====================== */
+
+function Ajustes({ datos, setDatos, yo, avisar, reiniciar, limpiarHistorial }) {
+  const [c, setC] = useState(datos.config);
+  const [nueva, setNueva] = useState("");
+  const [confirma, setConfirma] = useState(false);
+  const [limpia, setLimpia] = useState(false);
+
+  const guardar = () => {
+    const cfg = { ...c };
+    if (nueva.trim()) {
+      if (nueva.trim().length < 6) return avisar("La contraseña debe tener al menos 6 caracteres");
+      cfg.claves = { ...cfg.claves, [yo.id]: hash(nueva.trim()) };
+    }
+    setDatos((d) => ({ ...d, config: cfg }));
+    setNueva(""); avisar("Ajustes guardados");
+  };
+
+  return (
+    <>
+      <div className="bloque">
+        <h2>El programa</h2>
+        <p className="pie">Lo que ve el equipo al entrar.</p>
+        <div className="dos">
+          <Campo label="Nombre del programa">
+            <input value={c.programa} onChange={(e) => setC({ ...c, programa: e.target.value })} />
+          </Campo>
+          <Campo label="Empresa">
+            <input value={c.empresa} onChange={(e) => setC({ ...c, empresa: e.target.value })} />
+          </Campo>
+        </div>
+      </div>
+
+      <div className="bloque">
+        <h2>Mi contraseña</h2>
+        <Campo label="Nueva contraseña (mínimo 6 caracteres)">
+          <input type="password" value={nueva} onChange={(e) => setNueva(e.target.value)}
+            placeholder="Déjela vacía para no cambiarla" />
+        </Campo>
+        <div className="nota" style={{ marginBottom: 0 }}>
+          <b>Esta versión no protege información real</b>
+          Las contraseñas se validan dentro del navegador. Sirve para mostrar el flujo, pero cualquiera
+          con la consola abierta puede ver los datos. Para usarlo de verdad hacen falta servidor,
+          contraseñas cifradas y sesiones.
+        </div>
+      </div>
+
+      <div className="bloque">
+        <h2>Empezar en limpio</h2>
+        <p className="pie">
+          Los movimientos y canjes que trae la aplicación son inventados, solo para mostrar cómo se ve
+          con datos. Bórrelos antes de usarla de verdad: las personas y los premios se mantienen.
+        </p>
+        <button className="b hueco" onClick={() => setLimpia(true)}>Borrar movimientos y canjes</button>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <button className="b oro" onClick={guardar}>Guardar ajustes</button>
+        <button className="b peligro" onClick={() => setConfirma(true)}>Volver a los datos de ejemplo</button>
+      </div>
+
+      {limpia && (
+        <Modal titulo="Borrar movimientos y canjes" cerrar={() => setLimpia(false)}
+          pie={<>
+            <button className="b hueco" onClick={() => setLimpia(false)}>Cancelar</button>
+            <button className="b peligro" onClick={() => { limpiarHistorial(); setLimpia(false); }}>
+              Sí, dejar los saldos en cero
+            </button>
+          </>}>
+          <p style={{ margin: 0 }}>
+            Todos los saldos quedan en cero y se borra el historial completo. Las personas, los premios
+            y las existencias no se tocan. Esto no se puede deshacer.
+          </p>
+        </Modal>
+      )}
+
+      {confirma && (
+        <Modal titulo="Volver a los datos de ejemplo" cerrar={() => setConfirma(false)}
+          pie={<>
+            <button className="b hueco" onClick={() => setConfirma(false)}>Cancelar</button>
+            <button className="b peligro" onClick={() => { reiniciar(); setConfirma(false); }}>Sí, reiniciar</button>
+          </>}>
+          <p style={{ margin: 0 }}>
+            Se borran las personas, los premios, los movimientos y los canjes, y vuelve el contenido
+            de ejemplo. Esto no se puede deshacer.
+          </p>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+/* ====================== app ====================== */
+
+function App() {
+  const [datos, setDatos] = useState(null);
+  const [imgs, setImgs] = useState({});
+  const [cargando, setCargando] = useState(true);
+  const [falloGuardado, setFalloGuardado] = useState(false);
+  const [yo, setYo] = useState(null);
+  const [seccion, setSeccion] = useState("resumen");
+  const [aviso, setAviso] = useState("");
+
+  const inicial = () => ({
+    personas: PERSONAS.map((p) => ({ ...p })),
+    premios: PREMIOS.map((p) => ({ ...p })),
+    movimientos: movimientosIniciales(),
+    canjes: [],
+    config: { ...CONFIG },
+  });
+
+  const avisar = (m) => { setAviso(m); setTimeout(() => setAviso(""), 2600); };
+
+  useEffect(() => {
+    (async () => {
+      let d = null, m = {};
+      try { const r = await window.storage.get(LLAVE); d = r ? JSON.parse(r.value) : null; } catch { d = null; }
+      try { const r = await window.storage.get(LLAVE_IMG); m = r ? JSON.parse(r.value) : {}; } catch { m = {}; }
+      setDatos(d || inicial()); setImgs(m); setCargando(false);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!datos || cargando) return;
+    const t = setTimeout(async () => {
+      try { await window.storage.set(LLAVE, JSON.stringify(datos)); setFalloGuardado(false); }
+      catch { setFalloGuardado(true); }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [datos, cargando]);
+
+  useEffect(() => {
+    if (cargando) return;
+    const t = setTimeout(async () => {
+      try { await window.storage.set(LLAVE_IMG, JSON.stringify(imgs)); }
+      catch { setFalloGuardado(true); }
+    }, 650);
+    return () => clearTimeout(t);
+  }, [imgs, cargando]);
+
+  /* --- operaciones --- */
+
+  const otorgar = ({ personas, puntos, cat, proyecto, nota }) => {
+    const ahora = new Date().toISOString();
+    const nuevos = personas.map((persona) => ({
+      id: id(), persona, tipo: "otorgado", puntos, cat, proyecto, nota, fecha: ahora, por: yo.id,
+    }));
+    setDatos((d) => ({ ...d, movimientos: [...nuevos, ...d.movimientos] }));
+  };
+
+  const canjear = (personaId, premioId) => {
+    const premio = datos.premios.find((p) => p.id === premioId);
+    if (!premio) return { error: "Ese premio ya no está disponible" };
+    if (premio.stock <= 0) return { error: "Ese premio se agotó" };
+    if (saldoDe(datos, personaId) < premio.costo) return { error: "No le alcanzan los puntos" };
+
+    const canje = {
+      codigo: codigo(), persona: personaId, premio: premio.id, premioNombre: premio.nombre,
+      costo: premio.costo, estado: "Pendiente", fecha: new Date().toISOString(),
+    };
+    setDatos((d) => ({
+      ...d,
+      canjes: [canje, ...d.canjes],
+      premios: d.premios.map((p) => (p.id === premio.id ? { ...p, stock: Math.max(0, p.stock - 1) } : p)),
+      movimientos: [{
+        id: id(), persona: personaId, tipo: "canje", puntos: -premio.costo,
+        cat: "", proyecto: "", nota: `Canje de ${premio.nombre} (${canje.codigo})`,
+        fecha: canje.fecha, por: personaId,
+      }, ...d.movimientos],
+    }));
+    return { canje };
+  };
+
+  const entregar = (cod) =>
+    setDatos((d) => ({ ...d, canjes: d.canjes.map((c) => (c.codigo === cod ? { ...c, estado: "Entregado" } : c)) }));
+
+  const rechazar = (cod, motivo) => {
+    const c = datos.canjes.find((x) => x.codigo === cod);
+    if (!c) return;
+    setDatos((d) => ({
+      ...d,
+      canjes: d.canjes.map((x) => (x.codigo === cod ? { ...x, estado: "Rechazado", motivo } : x)),
+      premios: d.premios.map((p) => (p.id === c.premio ? { ...p, stock: p.stock + 1 } : p)),
+      movimientos: [{
+        id: id(), persona: c.persona, tipo: "reverso", puntos: c.costo,
+        cat: "", proyecto: "",
+        nota: `Devolución del canje ${c.codigo}${motivo ? ": " + motivo : ""}`,
+        fecha: new Date().toISOString(), por: yo.id,
+      }, ...d.movimientos],
+    }));
+  };
+
+  const limpiarHistorial = () => {
+    setDatos((d) => ({ ...d, movimientos: [], canjes: [] }));
+    avisar("Historial borrado, saldos en cero");
+  };
+
+  const reiniciar = () => { setDatos(inicial()); setImgs({}); setYo(null); avisar("Datos de ejemplo restaurados"); };
+
+  /* --- render --- */
+
+  if (cargando || !datos) {
+    return (
+      <div className="rec" style={{ display: "grid", placeItems: "center", minHeight: "100vh" }}>
+        <style>{CSS}</style>
+        <span style={{ color: "var(--soft)" }}>Cargando el programa…</span>
+      </div>
+    );
+  }
+
+  if (!yo) {
+    return (
+      <div className="rec">
+        <style>{CSS}</style>
+        <Entrada datos={datos} entrar={(u) => { setYo(u); setSeccion(u.rol === "admin" ? "resumen" : "saldo"); }} />
+      </div>
+    );
+  }
+
+  const esAdmin = yo.rol === "admin";
+  const pendientes = datos.canjes.filter((c) => c.estado === "Pendiente").length;
+
+  const secciones = esAdmin
+    ? [["resumen", "Resumen"], ["otorgar", "Otorgar puntos"], ["personas", "Personas"],
+       ["premios", "Premios"], ["canjes", `Canjes${pendientes ? ` (${pendientes})` : ""}`], ["ajustes", "Ajustes"]]
+    : [["saldo", "Mis puntos"], ["canjes", "Mis canjes"]];
+
+  return (
+    <div className="rec">
+      <style>{CSS}</style>
+
+      <header className="barra">
+        <div className="barra-in">
+          <Logo />
+          <span className="barra-sep" aria-hidden="true" />
+          <span className="programa">{datos.config.programa}</span>
+          <span className="quien">{yo.nombre}</span>
+          <button className="salir" onClick={() => setYo(null)}>Salir</button>
+        </div>
+      </header>
+
+      <nav className="menu">
+        <div className="menu-in">
+          {secciones.map(([k, n]) => (
+            <button key={k} aria-current={seccion === k} onClick={() => setSeccion(k)}>{n}</button>
+          ))}
+        </div>
+      </nav>
+
+      <main className="wrap" style={{ paddingTop: 24, paddingBottom: 48 }}>
+        {falloGuardado && (
+          <div className="nota" style={{ borderColor: "var(--alerta)", background: "#F6E6E0" }}>
+            <b>No se guardaron los últimos cambios</b>
+            Revise la conexión y repita la acción.
+          </div>
+        )}
+
+        {!esAdmin && seccion === "saldo" && <MiSaldo datos={datos} imgs={imgs} yo={yo} canjear={canjear} avisar={avisar} />}
+        {!esAdmin && seccion === "canjes" && <MisCanjes datos={datos} yo={yo} />}
+
+        {esAdmin && seccion === "resumen" && <Resumen datos={datos} ir={setSeccion} />}
+        {esAdmin && seccion === "otorgar" && <Otorgar datos={datos} otorgar={otorgar} avisar={avisar} />}
+        {esAdmin && seccion === "personas" && <Personas datos={datos} setDatos={setDatos} avisar={avisar} />}
+        {esAdmin && seccion === "premios" && <Premios datos={datos} setDatos={setDatos} imgs={imgs} setImgs={setImgs} avisar={avisar} />}
+        {esAdmin && seccion === "canjes" && <Canjes datos={datos} entregar={entregar} rechazar={rechazar} avisar={avisar} />}
+        {esAdmin && seccion === "ajustes" && <Ajustes datos={datos} setDatos={setDatos} yo={yo} avisar={avisar} reiniciar={reiniciar} limpiarHistorial={limpiarHistorial} />}
+      </main>
+
+      {aviso && <div className="aviso">{aviso}</div>}
+    </div>
+  );
+}
+
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+
+</script>
+
+<script>
+(function () {
+  var root = document.getElementById("root");
+  function falla(titulo, detalle) {
+    root.innerHTML = '<div id="aviso"><div class="malo"><b></b><p></p><pre></pre></div></div>';
+    root.querySelector("b").textContent = titulo;
+    root.querySelector("p").textContent = "Tome una foto de este mensaje para revisarlo.";
+    root.querySelector("pre").textContent = detalle;
+  }
+  function cargar(dirs, listo, error) {
+    var i = 0;
+    (function intento() {
+      if (i >= dirs.length) return error();
+      var s = document.createElement("script");
+      s.src = dirs[i++]; s.crossOrigin = "anonymous";
+      s.onload = listo; s.onerror = intento;
+      document.head.appendChild(s);
+    })();
+  }
+  var REACT = ["https://unpkg.com/react@18/umd/react.production.min.js",
+               "https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js",
+               "https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"];
+  var RDOM  = ["https://unpkg.com/react-dom@18/umd/react-dom.production.min.js",
+               "https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js",
+               "https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"];
+  var BABEL = ["https://unpkg.com/@babel/standalone/babel.min.js",
+               "https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js",
+               "https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"];
+  function noSePudo(n) {
+    falla("No se pudieron cargar las librerias (" + n + ")",
+      "Se intento con unpkg.com, jsdelivr.net y cdnjs.cloudflare.com y ninguno respondio.\n\n" +
+      "1. Si esta viendo el archivo en un visor que bloquea contenido externo, abra la pagina publicada.\n" +
+      "2. Si la red de la oficina bloquea esos dominios, pruebe con datos moviles.\n" +
+      "3. Revise la conexion a internet.");
+  }
+  function arrancar() {
+    try {
+      var fuente = document.getElementById("codigo-app").textContent;
+      var js = Babel.transform(fuente, { presets: [["react", { runtime: "classic" }]] }).code;
+      (0, eval)(js);
+    } catch (e) {
+      falla("La aplicacion no arranco", (e && (e.stack || e.message)) || String(e));
+      if (window.console) console.error(e);
+    }
+  }
+  cargar(REACT, function () {
+    cargar(RDOM, function () {
+      cargar(BABEL, arrancar, function () { noSePudo("Babel"); });
+    }, function () { noSePudo("react-dom"); });
+  }, function () { noSePudo("react"); });
+})();
+</script>
+</body>
+</html>
