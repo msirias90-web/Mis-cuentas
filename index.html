@@ -2334,7 +2334,8 @@ function Ciclos({
   avanzarCiclo,
   fijarGanador,
   asignarPuntos,
-  avisar
+  avisar,
+  ir
 }) {
   const [nombre, setNombre] = useState("");
   const [confirmar, setConfirmar] = useState(null);
@@ -2430,7 +2431,10 @@ function Ciclos({
       }, "Ganador") : ""));
     })))));
   }));
-  return /*#__PURE__*/React.createElement(React.Fragment, null, !ciclo && /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(AvisoPermisos, {
+    datos: datos,
+    ir: ir
+  }), !ciclo && /*#__PURE__*/React.createElement("div", {
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Abrir un ciclo"), /*#__PURE__*/React.createElement("p", {
     className: "pie"
@@ -2557,6 +2561,26 @@ function Ciclos({
 
 /* ====================== resumen ====================== */
 
+/** Sin jurado ni nominadores el programa no puede arrancar: hay que avisarlo. */
+function AvisoPermisos({
+  datos,
+  ir
+}) {
+  const activas = datos.personas.filter(p => p.activo);
+  const nominan = activas.filter(p => p.nomina).length;
+  const votan = activas.filter(p => p.vota).length;
+  if (nominan > 0 && votan > 0) return null;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "nota"
+  }, /*#__PURE__*/React.createElement("b", null, "Todavía nadie puede ", nominan === 0 && votan === 0 ? "nominar ni votar" : nominan === 0 ? "nominar" : "votar"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: "0 0 12px"
+    }
+  }, "Por eso no aparecen las pestañas Nominar y Votar. Marque en Ajustes quién puede nominar y quiénes son el jurado."), /*#__PURE__*/React.createElement("button", {
+    className: "b oro chico",
+    onClick: () => ir("ajustes")
+  }, "Ir a Ajustes"));
+}
 function Resumen({
   datos,
   ir
@@ -2573,7 +2597,10 @@ function Resumen({
     total: otorgados.filter(m => m.cat === c).reduce((s, m) => s + m.puntos, 0)
   })).filter(c => c.total > 0).sort((a, b) => b.total - a.total);
   const mayor = ((_porCategoria$ = porCategoria[0]) === null || _porCategoria$ === void 0 ? void 0 : _porCategoria$.total) || 1;
-  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(AvisoPermisos, {
+    datos: datos,
+    ir: ir
+  }), /*#__PURE__*/React.createElement("div", {
     className: "cifras"
   }, /*#__PURE__*/React.createElement("div", {
     className: "cifra"
@@ -3925,11 +3952,21 @@ function Programa() {
       }
     }));
   }
-  const esAdmin = yo.rol === "admin";
+
+  /* Los permisos se leen de los datos vivos, no de la copia que quedó al
+     entrar: si Coordinación los cambia, el menú reacciona de inmediato. */
+  const quien = datos.personas.find(p => p.id === yo.id) || yo;
+  const esAdmin = quien.rol === "admin";
   const pendientes = (datos.canjes || []).filter(c => c.estado === "Pendiente").length;
   const ciclo = cicloAbierto(datos);
   const porAcreditar = (datos.ciclos || []).filter(c => c.estado === "cerrado" && !c.asignado).length;
-  const secciones = esAdmin ? [["resumen", "Resumen"], ["ciclos", `Ciclos${porAcreditar ? ` (${porAcreditar})` : ""}`], ...(yo.nomina ? [["nominar", "Nominar"]] : []), ...(yo.vota ? [["votar", "Votar"]] : []), ["personas", "Personas"], ["premios", "Premios"], ["canjes", `Canjes${pendientes ? ` (${pendientes})` : ""}`], ["ajustes", "Ajustes"]] : [["saldo", "Mis puntos"], ...(yo.nomina ? [["nominar", "Nominar"]] : []), ...(yo.vota ? [["votar", "Votar"]] : []), ["canjes", "Mis canjes"]];
+  const secciones = esAdmin ? [["resumen", "Resumen"], ["ciclos", `Ciclos${porAcreditar ? ` (${porAcreditar})` : ""}`], ...(quien.nomina ? [["nominar", "Nominar"]] : []), ...(quien.vota ? [["votar", "Votar"]] : []), ["personas", "Personas"], ["premios", "Premios"], ["canjes", `Canjes${pendientes ? ` (${pendientes})` : ""}`], ["ajustes", "Ajustes"]] : [["saldo", "Mis puntos"], ...(quien.nomina ? [["nominar", "Nominar"]] : []), ...(quien.vota ? [["votar", "Votar"]] : []), ["canjes", "Mis canjes"]];
+
+  /* Si pierde el permiso de la sección en la que estaba, no dejarlo en el vacío. */
+  const valida = secciones.some(([k]) => k === seccion);
+  if (!valida && secciones.length) {
+    setTimeout(() => setSeccion(secciones[0][0]), 0);
+  }
   return /*#__PURE__*/React.createElement("div", {
     className: "rec"
   }, /*#__PURE__*/React.createElement("style", null, CSS), /*#__PURE__*/React.createElement("header", {
@@ -3945,7 +3982,7 @@ function Programa() {
     className: "programa"
   }, datos.config.programa), /*#__PURE__*/React.createElement("span", {
     className: "quien"
-  }, yo.nombre), /*#__PURE__*/React.createElement("button", {
+  }, quien.nombre), /*#__PURE__*/React.createElement("button", {
     className: "salir",
     onClick: () => setYo(null)
   }, "Salir"))), /*#__PURE__*/React.createElement("nav", {
@@ -3971,21 +4008,21 @@ function Programa() {
   }, /*#__PURE__*/React.createElement("b", null, "No se guardaron los últimos cambios"), "Revise la conexión y repita la acción."), !esAdmin && seccion === "saldo" && /*#__PURE__*/React.createElement(MiSaldo, {
     datos: datos,
     imgs: imgs,
-    yo: yo,
+    yo: quien,
     canjear: canjear,
     avisar: avisar
   }), !esAdmin && seccion === "canjes" && /*#__PURE__*/React.createElement(MisCanjes, {
     datos: datos,
-    yo: yo
-  }), seccion === "nominar" && yo.nomina && /*#__PURE__*/React.createElement(Nominar, {
+    yo: quien
+  }), seccion === "nominar" && quien.nomina && /*#__PURE__*/React.createElement(Nominar, {
     datos: datos,
-    yo: yo,
+    yo: quien,
     nominar: nominar,
     apoyar: apoyar,
     avisar: avisar
-  }), seccion === "votar" && yo.vota && /*#__PURE__*/React.createElement(Votar, {
+  }), seccion === "votar" && quien.vota && /*#__PURE__*/React.createElement(Votar, {
     datos: datos,
-    yo: yo,
+    yo: quien,
     votar: votar,
     avisar: avisar
   }), esAdmin && seccion === "resumen" && /*#__PURE__*/React.createElement(Resumen, {
@@ -3998,7 +4035,8 @@ function Programa() {
     avanzarCiclo: avanzarCiclo,
     fijarGanador: fijarGanador,
     asignarPuntos: asignarPuntos,
-    avisar: avisar
+    avisar: avisar,
+    ir: setSeccion
   }), esAdmin && seccion === "personas" && /*#__PURE__*/React.createElement(Personas, {
     datos: datos,
     setDatos: setDatos,
@@ -4017,7 +4055,7 @@ function Programa() {
   }), esAdmin && seccion === "ajustes" && /*#__PURE__*/React.createElement(Ajustes, {
     datos: datos,
     setDatos: setDatos,
-    yo: yo,
+    yo: quien,
     avisar: avisar,
     reiniciar: reiniciar,
     limpiarHistorial: limpiarHistorial
