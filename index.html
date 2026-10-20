@@ -451,60 +451,108 @@ function Imagen({ premio, imgs }) {
 /* ====================== datos de arranque ====================== */
 
 const CATEGORIAS = [
-  { nombre: "Quality Hero", sugerido: 200 },
-  { nombre: "Innovation Hero", sugerido: 300 },
-  { nombre: "Operational Excellence Hero", sugerido: 250 },
-  { nombre: "MVP", sugerido: 500 },
+  "Quality Hero",
+  "Innovation Hero",
+  "Operational Excellence Hero",
+  "MVP",
 ];
 
+/* El nominado recibe 20 puntos. El ganador llega a 40 en total:
+   los 20 de la nominación más 20 adicionales por ganar. */
+const PUNTOS = { nominado: 20, ganador: 40 };
+const EXTRA_GANADOR = PUNTOS.ganador - PUNTOS.nominado;
+
 const PERSONAS = [
-  { id: "a1", usuario: "MSirias",    nombre: "M. Sirias",    puesto: "", depto: "", correo: "", rol: "admin",       clave: "admin123", activo: true },
-  { id: "a2", usuario: "MBarrantes", nombre: "M. Barrantes", puesto: "", depto: "", correo: "", rol: "admin",       clave: "admin123", activo: true },
-  { id: "u1", usuario: "JAcuña",     nombre: "J. Acuña",     puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
-  { id: "u2", usuario: "SSolis",     nombre: "S. Solís",     puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
-  { id: "u3", usuario: "MUreña",     nombre: "M. Ureña",     puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
-  { id: "u4", usuario: "ABrenes",    nombre: "A. Brenes",    puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
-  { id: "u5", usuario: "TMolina",    nombre: "T. Molina",    puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
-  { id: "u6", usuario: "YSoto",      nombre: "Y. Soto",      puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", activo: true },
+  { id: "a1", usuario: "MSirias",    nombre: "M. Sirias",    puesto: "", depto: "", correo: "", rol: "admin",       clave: "admin123", nomina: true,  vota: true,  activo: true },
+  { id: "a2", usuario: "MBarrantes", nombre: "M. Barrantes", puesto: "", depto: "", correo: "", rol: "admin",       clave: "admin123", nomina: true,  vota: true,  activo: true },
+  { id: "u1", usuario: "JAcuña",     nombre: "J. Acuña",     puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", nomina: true,  vota: true,  activo: true },
+  { id: "u2", usuario: "SSolis",     nombre: "S. Solís",     puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", nomina: true,  vota: false, activo: true },
+  { id: "u3", usuario: "MUreña",     nombre: "M. Ureña",     puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", nomina: false, vota: false, activo: true },
+  { id: "u4", usuario: "ABrenes",    nombre: "A. Brenes",    puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", nomina: false, vota: true,  activo: true },
+  { id: "u5", usuario: "TMolina",    nombre: "T. Molina",    puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", nomina: false, vota: false, activo: true },
+  { id: "u6", usuario: "YSoto",      nombre: "Y. Soto",      puesto: "", depto: "", correo: "", rol: "colaborador", clave: "clave123", nomina: false, vota: false, activo: true },
 ];
 
 const CATS_PREMIO = ["Capacitación", "Mercancía", "Tiempo", "Experiencia", "Tarjetas", "Tecnología"];
 
+/* Costos reescalados a la economía de 20 y 40 puntos por ciclo.
+   Son una propuesta: ajústelos al valor real de cada premio. */
 const PREMIOS = [
-  { id: "p1", nombre: "Camiseta del equipo", desc: "Camiseta con el logo de la empresa, en su talla.", costo: 150, stock: 24, cat: "Mercancía", icono: "mercancia", img: "", activo: true },
-  { id: "p2", nombre: "Termo de acero", desc: "Termo de 750 ml con el logo de la empresa.", costo: 200, stock: 18, cat: "Mercancía", icono: "mercancia", img: "", activo: true },
-  { id: "p3", nombre: "Salida temprano un viernes", desc: "Se retira dos horas antes el viernes que escoja, coordinando con su jefatura.", costo: 300, stock: 40, cat: "Tiempo", icono: "tiempo", img: "", activo: true },
-  { id: "p4", nombre: "Tarjeta de regalo de ₡25.000", desc: "Canjeable en supermercados y tiendas por departamento.", costo: 600, stock: 10, cat: "Tarjetas", icono: "tarjeta", img: "", activo: true },
-  { id: "p5", nombre: "Cena para dos", desc: "Cena con un acompañante en uno de los restaurantes afiliados.", costo: 700, stock: 8, cat: "Experiencia", icono: "cena", img: "", activo: true },
-  { id: "p6", nombre: "Dos entradas al estadio", desc: "Par de entradas para un partido de la fecha que escoja, según disponibilidad.", costo: 800, stock: 6, cat: "Experiencia", icono: "estadio", img: "", activo: true },
-  { id: "p7", nombre: "Parqueo reservado por un mes", desc: "Espacio con su nombre junto a la entrada principal.", costo: 800, stock: 2, cat: "Experiencia", icono: "lugar", img: "", activo: true },
-  { id: "p8", nombre: "Curso de Excel avanzado", desc: "Tablas dinámicas, funciones de búsqueda y automatización de reportes. 20 horas.", costo: 900, stock: 10, cat: "Capacitación", icono: "curso-excel", img: "", activo: true },
-  { id: "p9", nombre: "Curso de Power BI", desc: "Modelado de datos y construcción de tableros. 24 horas, con certificado.", costo: 1200, stock: 8, cat: "Capacitación", icono: "curso-datos", img: "", activo: true },
-  { id: "p10", nombre: "Curso de Power Apps", desc: "Creación de aplicaciones internas sin programar. 24 horas, con certificado.", costo: 1200, stock: 8, cat: "Capacitación", icono: "curso-apps", img: "", activo: true },
-  { id: "p11", nombre: "Día libre adicional", desc: "Un día de vacaciones extra, coordinado con su jefatura.", costo: 1200, stock: 6, cat: "Tiempo", icono: "tiempo", img: "", activo: true },
-  { id: "p12", nombre: "Audífonos inalámbricos", desc: "Audífonos con cancelación de ruido.", costo: 1500, stock: 3, cat: "Tecnología", icono: "tecnologia", img: "", activo: true },
-  { id: "p13", nombre: "Un nivel de inglés", desc: "Un nivel completo en instituto afiliado, con examen de ubicación incluido.", costo: 1800, stock: 6, cat: "Capacitación", icono: "curso-idioma", img: "", activo: true },
-  { id: "p14", nombre: "Curso o taller a elección", desc: "Capacitación externa de hasta ₡80.000, en el tema que usted escoja.", costo: 2000, stock: 4, cat: "Capacitación", icono: "libro", img: "", activo: true },
+  { id: "p1", nombre: "Camiseta del equipo", desc: "Camiseta con el logo de la empresa, en su talla.", costo: 20, stock: 24, cat: "Mercancía", icono: "mercancia", img: "", activo: true },
+  { id: "p2", nombre: "Termo de acero", desc: "Termo de 750 ml con el logo de la empresa.", costo: 20, stock: 18, cat: "Mercancía", icono: "mercancia", img: "", activo: true },
+  { id: "p3", nombre: "Salida temprano un viernes", desc: "Se retira dos horas antes el viernes que escoja, coordinando con su jefatura.", costo: 40, stock: 40, cat: "Tiempo", icono: "tiempo", img: "", activo: true },
+  { id: "p4", nombre: "Tarjeta de regalo de ₡25.000", desc: "Canjeable en supermercados y tiendas por departamento.", costo: 60, stock: 10, cat: "Tarjetas", icono: "tarjeta", img: "", activo: true },
+  { id: "p5", nombre: "Cena para dos", desc: "Cena con un acompañante en uno de los restaurantes afiliados.", costo: 80, stock: 8, cat: "Experiencia", icono: "cena", img: "", activo: true },
+  { id: "p6", nombre: "Dos entradas al estadio", desc: "Par de entradas para un partido de la fecha que escoja, según disponibilidad.", costo: 80, stock: 6, cat: "Experiencia", icono: "estadio", img: "", activo: true },
+  { id: "p7", nombre: "Parqueo reservado por un mes", desc: "Espacio con su nombre junto a la entrada principal.", costo: 80, stock: 2, cat: "Experiencia", icono: "lugar", img: "", activo: true },
+  { id: "p8", nombre: "Curso de Excel avanzado", desc: "Tablas dinámicas, funciones de búsqueda y automatización de reportes. 20 horas.", costo: 100, stock: 10, cat: "Capacitación", icono: "curso-excel", img: "", activo: true },
+  { id: "p9", nombre: "Curso de Power BI", desc: "Modelado de datos y construcción de tableros. 24 horas, con certificado.", costo: 120, stock: 8, cat: "Capacitación", icono: "curso-datos", img: "", activo: true },
+  { id: "p10", nombre: "Curso de Power Apps", desc: "Creación de aplicaciones internas sin programar. 24 horas, con certificado.", costo: 120, stock: 8, cat: "Capacitación", icono: "curso-apps", img: "", activo: true },
+  { id: "p11", nombre: "Día libre adicional", desc: "Un día de vacaciones extra, coordinado con su jefatura.", costo: 120, stock: 6, cat: "Tiempo", icono: "tiempo", img: "", activo: true },
+  { id: "p12", nombre: "Audífonos inalámbricos", desc: "Audífonos con cancelación de ruido.", costo: 160, stock: 3, cat: "Tecnología", icono: "tecnologia", img: "", activo: true },
+  { id: "p13", nombre: "Un nivel de inglés", desc: "Un nivel completo en instituto afiliado, con examen de ubicación incluido.", costo: 180, stock: 6, cat: "Capacitación", icono: "curso-idioma", img: "", activo: true },
+  { id: "p14", nombre: "Curso o taller a elección", desc: "Capacitación externa de hasta ₡80.000, en el tema que usted escoja.", costo: 200, stock: 4, cat: "Capacitación", icono: "libro", img: "", activo: true },
 ];
 
-function movimientosIniciales() {
+/* ---------------- semilla de ejemplo ----------------
+   Un ciclo ya cerrado y pagado, y uno abierto en votación,
+   para que la demostración muestre las dos situaciones. */
+function semilla() {
   const d = (dias) => new Date(Date.now() - dias * 86400000).toISOString();
-  const m = [
-    ["u1", 250, "Operational Excellence Hero", "Flujo de recibo", "Reorganizó el flujo de recibo y bajó el tiempo de descarga.", 42],
-    ["u1", 500, "MVP", "", "Sostuvo la operación completa durante la semana de inventario.", 10],
-    ["u2", 200, "Quality Hero", "", "Cero hallazgos en la auditoría de bodega.", 35],
-    ["u2", 300, "Innovation Hero", "Tablero de órdenes", "Propuso el tablero de seguimiento de órdenes abiertas.", 14],
-    ["u3", 200, "Quality Hero", "", "Detectó la discrepancia de lote antes del despacho.", 28],
-    ["u4", 250, "Operational Excellence Hero", "", "Automatizó el reporte semanal de faltantes.", 21],
-    ["u4", 200, "Quality Hero", "", "Corrigió el etiquetado de producto en tránsito.", 4],
-    ["u5", 300, "Innovation Hero", "Conteo cíclico", "Rediseñó el formato de conteo cíclico.", 18],
-    ["u5", 200, "Quality Hero", "", "Mantuvo la exactitud de inventario por encima del 99%.", 6],
-    ["u6", 500, "MVP", "", "Cubrió dos rutas críticas durante la temporada alta.", 9],
+  const ciclos = [], nominaciones = [], votos = [], movimientos = [];
+
+  /* --- ciclo cerrado --- */
+  const c1 = { id: "c1", nombre: "Setiembre 2026", estado: "cerrado", creado: d(58), por: "a1",
+               ganadores: {}, asignado: true, asignadoFecha: d(30) };
+  const previas = [
+    ["Quality Hero", "u2", "a1", "Cero hallazgos en la auditoría de bodega.", true],
+    ["Quality Hero", "u3", "u1", "Detectó la discrepancia de lote antes del despacho.", false],
+    ["Innovation Hero", "u5", "u2", "Rediseñó el formato de conteo cíclico.", true],
+    ["Innovation Hero", "u4", "a2", "Automatizó el reporte semanal de faltantes.", false],
+    ["Operational Excellence Hero", "u1", "a1", "Reorganizó el flujo de recibo y bajó el tiempo de descarga.", true],
+    ["MVP", "u6", "a2", "Cubrió dos rutas críticas durante la temporada alta.", true],
+    ["MVP", "u1", "u2", "Sostuvo la operación durante la semana de inventario.", false],
   ];
-  return m.map(([persona, puntos, cat, proyecto, nota, dias]) => ({
-    id: id(), persona, tipo: "otorgado", puntos, cat, proyecto, nota,
-    fecha: d(dias), por: "a1",
-  })).sort((a, b) => b.fecha.localeCompare(a.fecha));
+  previas.forEach(([cat, persona, por, motivo, gano]) => {
+    const nid = id();
+    nominaciones.push({ id: nid, ciclo: "c1", cat, persona, por, motivo, fecha: d(50), apoyos: [] });
+    movimientos.push({ id: id(), persona, tipo: "nominacion", puntos: PUNTOS.nominado, cat,
+      ciclo: "c1", nota: `Nominado a ${cat} · ${c1.nombre}`, fecha: d(30), por: "a1" });
+    if (gano) {
+      c1.ganadores[cat] = nid;
+      movimientos.push({ id: id(), persona, tipo: "ganador", puntos: EXTRA_GANADOR, cat,
+        ciclo: "c1", nota: `Ganador de ${cat} · ${c1.nombre}`, fecha: d(30), por: "a1" });
+    }
+  });
+  ciclos.push(c1);
+
+  /* --- ciclo abierto, en votación --- */
+  const c2 = { id: "c2", nombre: "Octubre 2026", estado: "votacion", creado: d(12), por: "a1",
+               ganadores: {}, asignado: false, asignadoFecha: null };
+  const abiertas = [
+    ["Quality Hero", "u4", "a1", "Corrigió el etiquetado de producto en tránsito antes de que saliera."],
+    ["Quality Hero", "u5", "u2", "Mantuvo la exactitud de inventario por encima del 99%."],
+    ["Innovation Hero", "u2", "a2", "Propuso el tablero de seguimiento de órdenes abiertas."],
+    ["Innovation Hero", "u6", "u1", "Automatizó la conciliación de guías de transporte."],
+    ["Operational Excellence Hero", "u3", "a1", "Propuso el conteo cíclico que redujo los faltantes."],
+    ["MVP", "u1", "a2", "Lideró la migración del sistema de bodega sin parar la operación."],
+  ];
+  const ids = {};
+  abiertas.forEach(([cat, persona, por, motivo]) => {
+    const nid = id();
+    ids[cat + persona] = nid;
+    nominaciones.push({ id: nid, ciclo: "c2", cat, persona, por, motivo, fecha: d(8), apoyos: [] });
+  });
+  /* algunos votos ya emitidos */
+  [["Quality Hero", "u4", "a1"], ["Quality Hero", "u4", "u1"], ["Quality Hero", "u5", "a2"],
+   ["Innovation Hero", "u2", "a1"], ["Innovation Hero", "u6", "u4"],
+   ["MVP", "u1", "a1"], ["MVP", "u1", "a2"]].forEach(([cat, persona, por]) => {
+    votos.push({ id: id(), ciclo: "c2", cat, nominacion: ids[cat + persona], por, fecha: d(3) });
+  });
+  ciclos.push(c2);
+
+  movimientos.sort((a, b) => b.fecha.localeCompare(a.fecha));
+  return { ciclos, nominaciones, votos, movimientos };
 }
 
 const CONFIG = {
@@ -594,6 +642,38 @@ function Modal({ titulo, cerrar, children, pie, ancho }) {
 }
 
 /* ====================== lógica de saldos ====================== */
+
+/* ---------------- ciclos, nominaciones y votos ---------------- */
+
+/** El ciclo en curso: el único que no está cerrado. */
+const cicloAbierto = (datos) => datos.ciclos.find((c) => c.estado !== "cerrado") || null;
+
+const nominacionesDe = (datos, cicloId, cat) =>
+  datos.nominaciones.filter((n) => n.ciclo === cicloId && (!cat || n.cat === cat));
+
+const votosDe = (datos, cicloId, cat) =>
+  datos.votos.filter((v) => v.ciclo === cicloId && (!cat || v.cat === cat));
+
+/** Cuántos votos lleva cada nominación de una categoría. */
+const conteoVotos = (datos, cicloId, cat) => {
+  const m = {};
+  votosDe(datos, cicloId, cat).forEach((v) => { m[v.nominacion] = (m[v.nominacion] || 0) + 1; });
+  return m;
+};
+
+/** El voto que ya emitió esta persona en una categoría, si lo hay. */
+const miVoto = (datos, cicloId, cat, personaId) =>
+  datos.votos.find((v) => v.ciclo === cicloId && v.cat === cat && v.por === personaId) || null;
+
+/** Un jurado nominado en una categoría no vota en esa categoría. */
+const estaNominado = (datos, cicloId, cat, personaId) =>
+  nominacionesDe(datos, cicloId, cat).some((n) => n.persona === personaId);
+
+const ETAPAS = {
+  nominacion: { nombre: "Nominación abierta", siguiente: "votacion", botón: "Cerrar nominación y abrir votación" },
+  votacion:   { nombre: "Votación abierta",   siguiente: "cerrado",  botón: "Cerrar votación" },
+  cerrado:    { nombre: "Cerrado",            siguiente: null,       botón: null },
+};
 
 /* Referencia de catálogo: tres letras de la categoría más el costo, como un número de parte. */
 const refPremio = (p) =>
@@ -847,8 +927,8 @@ function MisCanjes({ datos, yo }) {
 
 function Otorgar({ datos, otorgar, avisar }) {
   const [sel, setSel] = useState([]);
-  const [cat, setCat] = useState(CATEGORIAS[0].nombre);
-  const [puntos, setPuntos] = useState(CATEGORIAS[0].sugerido);
+  const [cat, setCat] = useState(CATEGORIAS[0]);
+  const [puntos, setPuntos] = useState(PUNTOS.nominado);
   const [proyecto, setProyecto] = useState("");
   const [nota, setNota] = useState("");
   const [busca, setBusca] = useState("");
@@ -861,7 +941,6 @@ function Otorgar({ datos, otorgar, avisar }) {
   const alternar = (pid) =>
     setSel((s) => (s.includes(pid) ? s.filter((x) => x !== pid) : [...s, pid]));
 
-  const elegirCat = (c) => { setCat(c.nombre); setPuntos(c.sugerido); };
 
   const enviar = () => {
     const n = Number(puntos);
@@ -897,8 +976,8 @@ function Otorgar({ datos, otorgar, avisar }) {
       </p>
 
       <Campo label="¿Por qué? Escoja la categoría">
-        <select value={cat} onChange={(e) => elegirCat(CATEGORIAS.find((c) => c.nombre === e.target.value))}>
-          {CATEGORIAS.map((c) => <option key={c.nombre}>{c.nombre}</option>)}
+        <select value={cat} onChange={(e) => setCat(e.target.value)}>
+          {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
         </select>
       </Campo>
 
@@ -911,7 +990,7 @@ function Otorgar({ datos, otorgar, avisar }) {
         </Campo>
       </div>
       <div className="sugerido">
-        {[50, 100, 150, 250, 500].map((n) => (
+        {[10, 20, 40, 60].map((n) => (
           <button key={n} onClick={() => setPuntos(n)}>{n}</button>
         ))}
       </div>
@@ -930,6 +1009,427 @@ function Otorgar({ datos, otorgar, avisar }) {
   );
 }
 
+/* ====================== nominar ====================== */
+
+function Nominar({ datos, yo, nominar, apoyar, avisar }) {
+  const ciclo = cicloAbierto(datos);
+  const [cat, setCat] = useState(CATEGORIAS[0]);
+  const [persona, setPersona] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [apoyando, setApoyando] = useState(null);
+  const [motivoApoyo, setMotivoApoyo] = useState("");
+
+  if (!ciclo) return (
+    <div className="bloque">
+      <h2>Nominar</h2>
+      <div className="vacio"><b>No hay ciclo abierto</b>Coordinación abre el ciclo cuando corresponda.</div>
+    </div>
+  );
+
+  if (ciclo.estado !== "nominacion") return (
+    <div className="bloque">
+      <h2>Nominar</h2>
+      <p className="pie">Ciclo {ciclo.nombre}</p>
+      <div className="vacio">
+        <b>La nominación ya cerró</b>
+        {ciclo.estado === "votacion"
+          ? "El ciclo está en votación. Ya no se pueden agregar nominaciones."
+          : "Este ciclo está cerrado."}
+      </div>
+    </div>
+  );
+
+  const nominables = datos.personas.filter((p) => p.activo && p.id !== yo.id);
+  const delCat = nominacionesDe(datos, ciclo.id, cat);
+  const yaEsta = (pid) => delCat.find((n) => n.persona === pid);
+
+  const enviar = () => {
+    if (!persona) return avisar("Escoja a quién va a nominar");
+    if (!motivo.trim()) return avisar("Escriba por qué lo nomina");
+    const existente = yaEsta(persona);
+    if (existente) {
+      apoyar(existente.id, motivo.trim());
+      avisar("Ya estaba nominado: se agregó su respaldo");
+    } else {
+      nominar({ ciclo: ciclo.id, cat, persona, motivo: motivo.trim() });
+      avisar("Nominación registrada");
+    }
+    setPersona(""); setMotivo("");
+  };
+
+  const nombreDe = (pid) => datos.personas.find((p) => p.id === pid)?.nombre || "—";
+
+  return (
+    <>
+      <div className="bloque">
+        <h2>Nominar</h2>
+        <p className="pie">
+          Ciclo {ciclo.nombre}. Cada nominado recibe {PUNTOS.nominado} puntos cuando Coordinación
+          acredite el ciclo, y el ganador de cada categoría llega a {PUNTOS.ganador}.
+        </p>
+
+        <Campo label="Categoría">
+          <select value={cat} onChange={(e) => { setCat(e.target.value); setPersona(""); }}>
+            {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
+          </select>
+        </Campo>
+
+        <Campo label="¿A quién nomina?">
+          <select value={persona} onChange={(e) => setPersona(e.target.value)}>
+            <option value="">Escoja una persona</option>
+            {nominables.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nombre}{yaEsta(p.id) ? " — ya nominado en esta categoría" : ""}
+              </option>
+            ))}
+          </select>
+        </Campo>
+
+        <Campo label="¿Por qué? Sea concreto">
+          <textarea rows={3} value={motivo} onChange={(e) => setMotivo(e.target.value)}
+            placeholder="Detectó la discrepancia de lote antes del despacho y evitó el reclamo del cliente." />
+        </Campo>
+
+        <button className="b oro" onClick={enviar}>
+          {persona && yaEsta(persona) ? "Respaldar la nominación" : "Nominar"}
+        </button>
+        <p style={{ fontSize: 13, color: "var(--soft)", margin: "12px 0 0" }}>
+          No puede nominarse a usted mismo. Si la persona ya está nominada en esa categoría, su texto
+          se guarda como respaldo adicional.
+        </p>
+      </div>
+
+      <div className="bloque">
+        <h2>Nominaciones de este ciclo</h2>
+        <p className="pie">Lo que lleva {ciclo.nombre} hasta ahora, en todas las categorías.</p>
+        {nominacionesDe(datos, ciclo.id).length === 0 ? (
+          <div className="vacio"><b>Todavía sin nominaciones</b>Sea el primero en nominar a alguien.</div>
+        ) : CATEGORIAS.map((c) => {
+          const lista = nominacionesDe(datos, ciclo.id, c);
+          if (!lista.length) return null;
+          return (
+            <div key={c} style={{ marginBottom: 18 }}>
+              <h3 style={{ fontSize: 15, marginBottom: 8 }}>{c}</h3>
+              {lista.map((n) => (
+                <div key={n.id} style={{ borderLeft: "3px solid var(--oro)", background: "#FBF9F3",
+                  padding: "10px 13px", borderRadius: 2, marginBottom: 7 }}>
+                  <b style={{ fontSize: 14 }}>{nombreDe(n.persona)}</b>
+                  <div style={{ fontSize: 13.5, color: "var(--soft)", marginTop: 2 }}>{n.motivo}</div>
+                  <div style={{ fontSize: 12, color: "var(--soft)", marginTop: 5 }}>
+                    Nominado por {nombreDe(n.por)}
+                    {n.apoyos.length > 0 && ` · ${n.apoyos.length} respaldo${n.apoyos.length === 1 ? "" : "s"}`}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+/* ====================== votar ====================== */
+
+function Votar({ datos, yo, votar, avisar }) {
+  const ciclo = cicloAbierto(datos);
+
+  if (!ciclo) return (
+    <div className="bloque">
+      <h2>Votar</h2>
+      <div className="vacio"><b>No hay ciclo abierto</b>Coordinación abre el ciclo cuando corresponda.</div>
+    </div>
+  );
+
+  if (ciclo.estado !== "votacion") return (
+    <div className="bloque">
+      <h2>Votar</h2>
+      <p className="pie">Ciclo {ciclo.nombre}</p>
+      <div className="vacio">
+        <b>{ciclo.estado === "nominacion" ? "La votación todavía no abre" : "La votación ya cerró"}</b>
+        {ciclo.estado === "nominacion"
+          ? "Primero se recogen las nominaciones. Cuando Coordinación cierre esa etapa podrá votar."
+          : "Coordinación está confirmando los ganadores."}
+      </div>
+    </div>
+  );
+
+  const nombreDe = (pid) => datos.personas.find((p) => p.id === pid)?.nombre || "—";
+  const pendientes = CATEGORIAS.filter((c) =>
+    nominacionesDe(datos, ciclo.id, c).length > 0 &&
+    !estaNominado(datos, ciclo.id, c, yo.id) &&
+    !miVoto(datos, ciclo.id, c, yo.id)).length;
+
+  return (
+    <>
+      <div className="bloque">
+        <h2>Votar</h2>
+        <p className="pie">
+          Ciclo {ciclo.nombre}. Un voto por categoría. Puede cambiarlo mientras la votación siga abierta.
+          {pendientes > 0 && ` Le faltan ${pendientes} ${pendientes === 1 ? "categoría" : "categorías"} por votar.`}
+        </p>
+        <div className="nota" style={{ marginBottom: 0 }}>
+          <b>Los votos no se muestran mientras la votación está abierta</b>
+          Así nadie vota siguiendo al que va ganando. El conteo lo ve Coordinación al cerrar.
+        </div>
+      </div>
+
+      {CATEGORIAS.map((c) => {
+        const lista = nominacionesDe(datos, ciclo.id, c);
+        const bloqueado = estaNominado(datos, ciclo.id, c, yo.id);
+        const voto = miVoto(datos, ciclo.id, c, yo.id);
+        return (
+          <div className="bloque" key={c}>
+            <h2>{c}</h2>
+            {lista.length === 0 ? (
+              <div className="vacio"><b>Sin nominados</b>Nadie fue nominado en esta categoría.</div>
+            ) : bloqueado ? (
+              <>
+                <p className="pie" style={{ marginBottom: 12 }}>
+                  Usted está nominado en esta categoría, así que no vota aquí.
+                </p>
+                {lista.map((n) => (
+                  <div key={n.id} style={{ padding: "9px 0", borderBottom: "1px solid var(--linea)",
+                    fontSize: 14, color: "var(--soft)" }}>
+                    {nombreDe(n.persona)}
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                <p className="pie">
+                  {voto ? "Ya votó en esta categoría. Puede cambiar su voto." : "Escoja a una persona."}
+                </p>
+                {lista.map((n) => {
+                  const elegido = voto && voto.nominacion === n.id;
+                  return (
+                    <div key={n.id} style={{
+                      border: elegido ? "1px solid var(--oro)" : "1px solid var(--linea)",
+                      boxShadow: elegido ? "inset 3px 0 0 var(--oro)" : "none",
+                      borderRadius: 2, padding: "12px 14px", marginBottom: 8,
+                      background: elegido ? "#FBF7EE" : "var(--panel)",
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                        <div style={{ minWidth: 0 }}>
+                          <b style={{ fontSize: 15 }}>{nombreDe(n.persona)}</b>
+                          <div style={{ fontSize: 13.5, color: "var(--soft)", marginTop: 3 }}>{n.motivo}</div>
+                          {n.apoyos.map((a, i) => (
+                            <div key={i} style={{ fontSize: 13, color: "var(--soft)", marginTop: 5,
+                              paddingLeft: 10, borderLeft: "2px solid var(--linea-2)" }}>
+                              {a.motivo}
+                            </div>
+                          ))}
+                          <div style={{ fontSize: 12, color: "var(--soft)", marginTop: 6 }}>
+                            Nominado por {nombreDe(n.por)}
+                          </div>
+                        </div>
+                        <button className={`b ${elegido ? "oro" : "hueco"} chico`} style={{ flex: "none" }}
+                          onClick={() => {
+                            votar({ ciclo: ciclo.id, cat: c, nominacion: n.id });
+                            avisar(`Voto registrado en ${c}`);
+                          }}>
+                          {elegido ? "Su voto" : "Votar"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/* ====================== ciclos ====================== */
+
+function Ciclos({ datos, setDatos, crearCiclo, avanzarCiclo, fijarGanador, asignarPuntos, avisar }) {
+  const [nombre, setNombre] = useState("");
+  const [confirmar, setConfirmar] = useState(null);
+  const ciclo = cicloAbierto(datos);
+  const cerrados = datos.ciclos.filter((c) => c.estado === "cerrado");
+  const nombreDe = (pid) => datos.personas.find((p) => p.id === pid)?.nombre || "—";
+
+  /* por acreditar: cerrado y sin asignar */
+  const porAcreditar = datos.ciclos.filter((c) => c.estado === "cerrado" && !c.asignado);
+
+  const resumenAcreditacion = (c) => {
+    const noms = nominacionesDe(datos, c.id);
+    const ganadores = Object.values(c.ganadores || {}).filter(Boolean);
+    return {
+      nominados: noms.length,
+      ganadores: ganadores.length,
+      total: noms.length * PUNTOS.nominado + ganadores.length * EXTRA_GANADOR,
+      faltan: CATEGORIAS.filter((cat) =>
+        nominacionesDe(datos, c.id, cat).length > 0 && !c.ganadores?.[cat]),
+    };
+  };
+
+  const Tabla = ({ c, editable }) => (
+    <>
+      {CATEGORIAS.map((cat) => {
+        const lista = nominacionesDe(datos, c.id, cat);
+        if (!lista.length) return (
+          <div key={cat} style={{ marginBottom: 16 }}>
+            <h3 style={{ fontSize: 15, marginBottom: 4 }}>{cat}</h3>
+            <p style={{ fontSize: 13.5, color: "var(--soft)", margin: 0 }}>Sin nominados.</p>
+          </div>
+        );
+        const conteo = conteoVotos(datos, c.id, cat);
+        const orden = [...lista].sort((a, b) => (conteo[b.id] || 0) - (conteo[a.id] || 0));
+        const tope = conteo[orden[0]?.id] || 0;
+        const empate = orden.filter((n) => (conteo[n.id] || 0) === tope && tope > 0).length > 1;
+        return (
+          <div key={cat} style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+              <h3 style={{ fontSize: 15, marginBottom: 7 }}>{cat}</h3>
+              {empate && editable && <span className="etq esp">Empate en primer lugar</span>}
+            </div>
+            <div className="scroll">
+              <table>
+                <thead><tr><th>Nominado</th><th className="der">Votos</th><th>Ganador</th></tr></thead>
+                <tbody>
+                  {orden.map((n) => {
+                    const esGanador = c.ganadores?.[cat] === n.id;
+                    return (
+                      <tr key={n.id}>
+                        <td>
+                          <b>{nombreDe(n.persona)}</b>
+                          <div style={{ fontSize: 12.5, color: "var(--soft)" }}>
+                            Nominado por {nombreDe(n.por)}
+                            {n.apoyos.length > 0 && ` · ${n.apoyos.length} respaldo${n.apoyos.length === 1 ? "" : "s"}`}
+                          </div>
+                        </td>
+                        <td className="der"><b>{conteo[n.id] || 0}</b></td>
+                        <td>
+                          {editable ? (
+                            <button className={`b ${esGanador ? "oro" : "hueco"} chico`}
+                              onClick={() => fijarGanador(c.id, cat, esGanador ? null : n.id)}>
+                              {esGanador ? "Ganador" : "Marcar"}
+                            </button>
+                          ) : esGanador ? <span className="etq list">Ganador</span> : ""}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+
+  return (
+    <>
+      {!ciclo && (
+        <div className="bloque">
+          <h2>Abrir un ciclo</h2>
+          <p className="pie">Solo puede haber un ciclo abierto a la vez.</p>
+          <Campo label="Nombre del ciclo">
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Noviembre 2026" />
+          </Campo>
+          <button className="b oro" onClick={() => {
+            if (!nombre.trim()) return avisar("Póngale nombre al ciclo");
+            crearCiclo(nombre.trim()); setNombre("");
+            avisar("Ciclo abierto en etapa de nominación");
+          }}>Abrir ciclo</button>
+        </div>
+      )}
+
+      {ciclo && (
+        <div className="bloque">
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "baseline" }}>
+            <div>
+              <h2>{ciclo.nombre}</h2>
+              <p className="pie" style={{ marginBottom: 0 }}>
+                {nominacionesDe(datos, ciclo.id).length} nominaciones ·{" "}
+                {votosDe(datos, ciclo.id).length} votos emitidos
+              </p>
+            </div>
+            <span className="etq esp">{ETAPAS[ciclo.estado].nombre}</span>
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <button className="b" onClick={() => {
+              avanzarCiclo(ciclo.id);
+              avisar(ciclo.estado === "nominacion" ? "Votación abierta" : "Votación cerrada");
+            }}>{ETAPAS[ciclo.estado].botón}</button>
+          </div>
+          {ciclo.estado === "votacion" && (
+            <p style={{ fontSize: 13, color: "var(--soft)", margin: "12px 0 0" }}>
+              Mientras la votación esté abierta, el jurado no ve el conteo. Usted sí, al cerrarla.
+            </p>
+          )}
+        </div>
+      )}
+
+      {porAcreditar.map((c) => {
+        const r = resumenAcreditacion(c);
+        return (
+          <div className="bloque" key={c.id}>
+            <h2>{c.nombre} · confirmar ganadores</h2>
+            <p className="pie">
+              Marque el ganador de cada categoría. La app muestra el conteo, pero la decisión la toma usted.
+            </p>
+            <Tabla c={c} editable />
+            <div style={{ borderTop: "1px solid var(--linea)", paddingTop: 16, marginTop: 4 }}>
+              {r.faltan.length > 0 ? (
+                <div className="nota" style={{ marginBottom: 0 }}>
+                  <b>Falta marcar ganador</b>
+                  {r.faltan.join(", ")}. Marque uno en cada categoría con nominados para poder acreditar.
+                </div>
+              ) : (
+                <>
+                  <p style={{ fontSize: 14, marginTop: 0 }}>
+                    Se acreditarán <b>{miles(r.total)} puntos</b>: {PUNTOS.nominado} a cada uno de los{" "}
+                    {r.nominados} nominados, más {EXTRA_GANADOR} adicionales a los {r.ganadores} ganadores.
+                  </p>
+                  <button className="b oro" onClick={() => setConfirmar(c)}>Asignar puntos del ciclo</button>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {cerrados.filter((c) => c.asignado).map((c) => (
+        <div className="bloque" key={c.id}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+            <h2>{c.nombre}</h2>
+            <span className="etq list">Puntos acreditados</span>
+          </div>
+          <p className="pie">Acreditado el {fecha(c.asignadoFecha)}.</p>
+          <Tabla c={c} editable={false} />
+        </div>
+      ))}
+
+      {confirmar && (
+        <Modal titulo="Asignar los puntos del ciclo" cerrar={() => setConfirmar(null)}
+          pie={<>
+            <button className="b hueco" onClick={() => setConfirmar(null)}>Cancelar</button>
+            <button className="b oro" onClick={() => {
+              const r = asignarPuntos(confirmar.id);
+              setConfirmar(null);
+              avisar(r.error || `${miles(r.total)} puntos acreditados`);
+            }}>Sí, acreditar</button>
+          </>}>
+          <p style={{ marginTop: 0 }}>
+            Va a acreditar los puntos de <b>{confirmar.nombre}</b>. Cada movimiento queda en el historial
+            de cada persona con la categoría y el ciclo.
+          </p>
+          <p style={{ marginBottom: 0, color: "var(--soft)", fontSize: 14 }}>
+            Esto se hace una sola vez por ciclo. Si después hay que corregir algo, use un ajuste manual
+            desde Otorgar puntos, para que quede el rastro.
+          </p>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 /* ====================== resumen ====================== */
 
 function Resumen({ datos, ir }) {
@@ -943,8 +1443,8 @@ function Resumen({ datos, ir }) {
   const sinStock = datos.premios.filter((p) => p.activo && p.stock <= 0);
 
   const porCategoria = CATEGORIAS.map((c) => ({
-    nombre: c.nombre,
-    total: otorgados.filter((m) => m.cat === c.nombre).reduce((s, m) => s + m.puntos, 0),
+    nombre: c,
+    total: otorgados.filter((m) => m.cat === c).reduce((s, m) => s + m.puntos, 0),
   })).filter((c) => c.total > 0).sort((a, b) => b.total - a.total);
   const mayor = porCategoria[0]?.total || 1;
 
@@ -1006,7 +1506,7 @@ function Resumen({ datos, ir }) {
 
 const PERSONA_VACIA = {
   usuario: "", nombre: "", puesto: "", depto: "", correo: "",
-  rol: "colaborador", clave: "clave123", activo: true,
+  rol: "colaborador", clave: "clave123", nomina: false, vota: false, activo: true,
 };
 
 function Personas({ datos, setDatos, avisar }) {
@@ -1032,8 +1532,9 @@ function Personas({ datos, setDatos, avisar }) {
   };
 
   const exportar = () => csv("personas.csv", [
-    ["Usuario", "Nombre", "Puesto", "Departamento", "Correo", "Rol", "Activo", "Ganados", "Saldo"],
+    ["Usuario", "Nombre", "Puesto", "Departamento", "Correo", "Rol", "Nomina", "Vota", "Activo", "Ganados", "Saldo"],
     ...datos.personas.map((p) => [p.usuario, p.nombre, p.puesto, p.depto, p.correo, p.rol,
+      p.nomina ? "Sí" : "No", p.vota ? "Sí" : "No",
       p.activo ? "Sí" : "No", ganadosDe(datos, p.id), saldoDe(datos, p.id)]),
   ]);
 
@@ -1060,7 +1561,14 @@ function Personas({ datos, setDatos, avisar }) {
                   <b>{p.nombre}</b>
                   <div style={{ fontSize: 12.5, color: "var(--soft)" }}>{p.puesto}</div>
                 </td>
-                <td>{p.usuario}{p.rol === "admin" && <div><span className="etq esp">Coordinación</span></div>}</td>
+                <td>
+                  {p.usuario}
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 3 }}>
+                    {p.rol === "admin" && <span className="etq esp">Coordinación</span>}
+                    {p.vota && <span className="etq list">Jurado</span>}
+                    {p.nomina && !p.vota && <span className="etq gris">Nomina</span>}
+                  </div>
+                </td>
                 <td style={{ color: "var(--soft)" }}>{p.depto}</td>
                 <td className="der">{p.rol === "colaborador" ? miles(ganadosDe(datos, p.id)) : "—"}</td>
                 <td className="der"><b>{p.rol === "colaborador" ? miles(saldoDe(datos, p.id)) : "—"}</b></td>
@@ -1119,9 +1627,34 @@ function Personas({ datos, setDatos, avisar }) {
               </select>
             </Campo>
           </div>
-          <p style={{ fontSize: 13.5, color: "var(--soft)", margin: 0 }}>
-            Coordinación puede otorgar puntos, administrar premios y entregar canjes. Un colaborador
-            solo ve su propio saldo y el catálogo.
+          <div style={{ borderTop: "1px solid var(--linea)", paddingTop: 14, marginTop: 4 }}>
+            <label style={{ fontSize: 13.5, fontWeight: 600, display: "block", marginBottom: 9 }}>
+              Permisos del ciclo
+            </label>
+            <label style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 14, marginBottom: 10 }}>
+              <input type="checkbox" checked={!!edita.nomina} style={{ marginTop: 3 }}
+                onChange={(e) => setEdita({ ...edita, nomina: e.target.checked })} />
+              <span>
+                <b>Puede nominar</b>
+                <div style={{ color: "var(--soft)", fontSize: 13 }}>
+                  Propone candidatos en cada categoría mientras la nominación esté abierta.
+                </div>
+              </span>
+            </label>
+            <label style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 14 }}>
+              <input type="checkbox" checked={!!edita.vota} style={{ marginTop: 3 }}
+                onChange={(e) => setEdita({ ...edita, vota: e.target.checked })} />
+              <span>
+                <b>Puede votar · Jurado</b>
+                <div style={{ color: "var(--soft)", fontSize: 13 }}>
+                  Vota entre los nominados. Si está nominado en una categoría, no vota en esa.
+                </div>
+              </span>
+            </label>
+          </div>
+          <p style={{ fontSize: 13.5, color: "var(--soft)", margin: "14px 0 0" }}>
+            Coordinación administra ciclos, premios y canjes. Un colaborador sin permisos solo ve su
+            saldo y el catálogo.
           </p>
         </Modal>
       )}
@@ -1520,13 +2053,16 @@ function App() {
   const [seccion, setSeccion] = useState("resumen");
   const [aviso, setAviso] = useState("");
 
-  const inicial = () => ({
-    personas: PERSONAS.map((p) => ({ ...p })),
-    premios: PREMIOS.map((p) => ({ ...p })),
-    movimientos: movimientosIniciales(),
-    canjes: [],
-    config: { ...CONFIG },
-  });
+  const inicial = () => {
+    const { ciclos, nominaciones, votos, movimientos } = semilla();
+    return {
+      personas: PERSONAS.map((p) => ({ ...p })),
+      premios: PREMIOS.map((p) => ({ ...p })),
+      ciclos, nominaciones, votos, movimientos,
+      canjes: [],
+      config: { ...CONFIG },
+    };
+  };
 
   const avisar = (m) => { setAviso(m); setTimeout(() => setAviso(""), 2600); };
 
@@ -1558,6 +2094,91 @@ function App() {
   }, [imgs, cargando]);
 
   /* --- operaciones --- */
+
+  /* ---------- ciclos, nominaciones y votos ---------- */
+
+  const crearCiclo = (nombre) =>
+    setDatos((d) => ({
+      ...d,
+      ciclos: [...d.ciclos, {
+        id: id(), nombre, estado: "nominacion", creado: new Date().toISOString(),
+        por: yo.id, ganadores: {}, asignado: false, asignadoFecha: null,
+      }],
+    }));
+
+  const avanzarCiclo = (cicloId) =>
+    setDatos((d) => ({
+      ...d,
+      ciclos: d.ciclos.map((c) =>
+        c.id === cicloId ? { ...c, estado: ETAPAS[c.estado].siguiente || c.estado } : c),
+    }));
+
+  const nominar = ({ ciclo, cat, persona, motivo }) =>
+    setDatos((d) => ({
+      ...d,
+      nominaciones: [...d.nominaciones, {
+        id: id(), ciclo, cat, persona, por: yo.id, motivo,
+        fecha: new Date().toISOString(), apoyos: [],
+      }],
+    }));
+
+  const apoyar = (nominacionId, motivo) =>
+    setDatos((d) => ({
+      ...d,
+      nominaciones: d.nominaciones.map((n) => n.id === nominacionId
+        ? { ...n, apoyos: [...n.apoyos, { por: yo.id, motivo, fecha: new Date().toISOString() }] }
+        : n),
+    }));
+
+  /* Un voto por persona y categoría: si ya votó, se reemplaza. */
+  const votar = ({ ciclo, cat, nominacion }) =>
+    setDatos((d) => ({
+      ...d,
+      votos: [
+        ...d.votos.filter((v) => !(v.ciclo === ciclo && v.cat === cat && v.por === yo.id)),
+        { id: id(), ciclo, cat, nominacion, por: yo.id, fecha: new Date().toISOString() },
+      ],
+    }));
+
+  const fijarGanador = (cicloId, cat, nominacionId) =>
+    setDatos((d) => ({
+      ...d,
+      ciclos: d.ciclos.map((c) => c.id === cicloId
+        ? { ...c, ganadores: { ...c.ganadores, [cat]: nominacionId } }
+        : c),
+    }));
+
+  /** Acredita los puntos del ciclo una sola vez. */
+  const asignarPuntos = (cicloId) => {
+    const c = datos.ciclos.find((x) => x.id === cicloId);
+    if (!c) return { error: "Ese ciclo ya no existe" };
+    if (c.asignado) return { error: "Los puntos de ese ciclo ya se acreditaron" };
+
+    const ahora = new Date().toISOString();
+    const noms = nominacionesDe(datos, cicloId);
+    const nuevos = [];
+    noms.forEach((n) => {
+      nuevos.push({
+        id: id(), persona: n.persona, tipo: "nominacion", puntos: PUNTOS.nominado,
+        cat: n.cat, ciclo: cicloId, nota: `Nominado a ${n.cat} · ${c.nombre}`,
+        fecha: ahora, por: yo.id,
+      });
+      if (c.ganadores?.[n.cat] === n.id) {
+        nuevos.push({
+          id: id(), persona: n.persona, tipo: "ganador", puntos: EXTRA_GANADOR,
+          cat: n.cat, ciclo: cicloId, nota: `Ganador de ${n.cat} · ${c.nombre}`,
+          fecha: ahora, por: yo.id,
+        });
+      }
+    });
+    const total = nuevos.reduce((sum, m) => sum + m.puntos, 0);
+    setDatos((d) => ({
+      ...d,
+      movimientos: [...nuevos, ...d.movimientos],
+      ciclos: d.ciclos.map((x) => x.id === cicloId ? { ...x, asignado: true, asignadoFecha: ahora } : x),
+    }));
+    return { total };
+  };
 
   const otorgar = ({ personas, puntos, cat, proyecto, nota }) => {
     const ahora = new Date().toISOString();
@@ -1610,8 +2231,8 @@ function App() {
   };
 
   const limpiarHistorial = () => {
-    setDatos((d) => ({ ...d, movimientos: [], canjes: [] }));
-    avisar("Historial borrado, saldos en cero");
+    setDatos((d) => ({ ...d, movimientos: [], canjes: [], ciclos: [], nominaciones: [], votos: [] }));
+    avisar("Historial y ciclos borrados, saldos en cero");
   };
 
   const reiniciar = () => { setDatos(inicial()); setImgs({}); setYo(null); avisar("Datos de ejemplo restaurados"); };
@@ -1639,10 +2260,20 @@ function App() {
   const esAdmin = yo.rol === "admin";
   const pendientes = datos.canjes.filter((c) => c.estado === "Pendiente").length;
 
+  const ciclo = cicloAbierto(datos);
+  const porAcreditar = datos.ciclos.filter((c) => c.estado === "cerrado" && !c.asignado).length;
+
   const secciones = esAdmin
-    ? [["resumen", "Resumen"], ["otorgar", "Otorgar puntos"], ["personas", "Personas"],
+    ? [["resumen", "Resumen"],
+       ["ciclos", `Ciclos${porAcreditar ? ` (${porAcreditar})` : ""}`],
+       ...(yo.nomina ? [["nominar", "Nominar"]] : []),
+       ...(yo.vota ? [["votar", "Votar"]] : []),
+       ["otorgar", "Otorgar puntos"], ["personas", "Personas"],
        ["premios", "Premios"], ["canjes", `Canjes${pendientes ? ` (${pendientes})` : ""}`], ["ajustes", "Ajustes"]]
-    : [["saldo", "Mis puntos"], ["canjes", "Mis canjes"]];
+    : [["saldo", "Mis puntos"],
+       ...(yo.nomina ? [["nominar", "Nominar"]] : []),
+       ...(yo.vota ? [["votar", "Votar"]] : []),
+       ["canjes", "Mis canjes"]];
 
   return (
     <div className="rec">
@@ -1677,7 +2308,15 @@ function App() {
         {!esAdmin && seccion === "saldo" && <MiSaldo datos={datos} imgs={imgs} yo={yo} canjear={canjear} avisar={avisar} />}
         {!esAdmin && seccion === "canjes" && <MisCanjes datos={datos} yo={yo} />}
 
+        {seccion === "nominar" && yo.nomina &&
+          <Nominar datos={datos} yo={yo} nominar={nominar} apoyar={apoyar} avisar={avisar} />}
+        {seccion === "votar" && yo.vota &&
+          <Votar datos={datos} yo={yo} votar={votar} avisar={avisar} />}
+
         {esAdmin && seccion === "resumen" && <Resumen datos={datos} ir={setSeccion} />}
+        {esAdmin && seccion === "ciclos" && <Ciclos datos={datos} setDatos={setDatos}
+          crearCiclo={crearCiclo} avanzarCiclo={avanzarCiclo} fijarGanador={fijarGanador}
+          asignarPuntos={asignarPuntos} avisar={avisar} />}
         {esAdmin && seccion === "otorgar" && <Otorgar datos={datos} otorgar={otorgar} avisar={avisar} />}
         {esAdmin && seccion === "personas" && <Personas datos={datos} setDatos={setDatos} avisar={avisar} />}
         {esAdmin && seccion === "premios" && <Premios datos={datos} setDatos={setDatos} imgs={imgs} setImgs={setImgs} avisar={avisar} />}
@@ -1692,7 +2331,6 @@ function App() {
 
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-
 </script>
 
 <script>
