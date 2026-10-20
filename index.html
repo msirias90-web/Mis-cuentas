@@ -1331,6 +1331,7 @@ function semilla() {
       cat,
       persona,
       por,
+      proyecto: "",
       motivo,
       fecha: d(50),
       apoyos: []
@@ -1385,6 +1386,7 @@ function semilla() {
       cat,
       persona,
       por,
+      proyecto: "",
       motivo,
       fecha: d(8),
       apoyos: []
@@ -1647,6 +1649,15 @@ function Modal({
 
 /** El ciclo en curso: el único que no está cerrado. */
 const cicloAbierto = datos => (datos.ciclos || []).find(c => c.estado !== "cerrado") || null;
+
+/** El que se está viendo ahora: el abierto, o el último si ya cerró.
+    Así, al cerrar la votación, el jurado sigue viendo sus resultados. */
+const cicloActual = datos => {
+  const abierto = cicloAbierto(datos);
+  if (abierto) return abierto;
+  const lista = datos.ciclos || [];
+  return lista.length ? lista[lista.length - 1] : null;
+};
 const nominacionesDe = (datos, cicloId, cat) => (datos.nominaciones || []).filter(n => n.ciclo === cicloId && (!cat || n.cat === cat));
 const votosDe = (datos, cicloId, cat) => (datos.votos || []).filter(v => v.ciclo === cicloId && (!cat || v.cat === cat));
 
@@ -1933,107 +1944,6 @@ function MisCanjes({
   }, c.estado))))))));
 }
 
-/* ====================== otorgar puntos ====================== */
-
-function Otorgar({
-  datos,
-  otorgar,
-  avisar
-}) {
-  const [sel, setSel] = useState([]);
-  const [cat, setCat] = useState(CATEGORIAS[0]);
-  const [puntos, setPuntos] = useState(PUNTOS.nominado);
-  const [proyecto, setProyecto] = useState("");
-  const [nota, setNota] = useState("");
-  const [busca, setBusca] = useState("");
-  const gente = datos.personas.filter(p => p.rol === "colaborador" && p.activo && (!busca.trim() || `${p.nombre} ${p.depto} ${p.puesto}`.toLowerCase().includes(busca.toLowerCase())));
-  const alternar = pid => setSel(s => s.includes(pid) ? s.filter(x => x !== pid) : [...s, pid]);
-  const enviar = () => {
-    const n = Number(puntos);
-    if (sel.length === 0) return avisar("Escoja al menos una persona");
-    if (!n || n <= 0) return avisar("Los puntos deben ser mayores que cero");
-    if (!nota.trim()) return avisar("Escriba el motivo del reconocimiento");
-    otorgar({
-      personas: sel,
-      puntos: n,
-      cat,
-      proyecto: proyecto.trim(),
-      nota: nota.trim()
-    });
-    avisar(`${miles(n)} puntos para ${sel.length} ${sel.length === 1 ? "persona" : "personas"}`);
-    setSel([]);
-    setProyecto("");
-    setNota("");
-  };
-  return /*#__PURE__*/React.createElement("div", {
-    className: "bloque"
-  }, /*#__PURE__*/React.createElement("h2", null, "Otorgar puntos"), /*#__PURE__*/React.createElement("p", {
-    className: "pie"
-  }, "Cada asignación queda registrada con su motivo, para que después se pueda explicar."), /*#__PURE__*/React.createElement(Campo, {
-    label: "¿A quién?"
-  }, /*#__PURE__*/React.createElement("input", {
-    value: busca,
-    onChange: e => setBusca(e.target.value),
-    placeholder: "Filtrar por nombre, puesto o departamento"
-  })), /*#__PURE__*/React.createElement("div", {
-    className: "gente"
-  }, gente.map(p => /*#__PURE__*/React.createElement("label", {
-    key: p.id
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "checkbox",
-    checked: sel.includes(p.id),
-    onChange: () => alternar(p.id)
-  }), p.nombre, /*#__PURE__*/React.createElement("span", null, miles(saldoDe(datos, p.id))))), gente.length === 0 && /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "var(--soft)",
-      fontSize: 14
-    }
-  }, "Nadie coincide con ese filtro.")), /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 13.5,
-      color: "var(--soft)",
-      margin: "8px 0 16px"
-    }
-  }, sel.length === 0 ? "Nadie seleccionado todavía." : `${sel.length} seleccionada${sel.length === 1 ? "" : "s"}.`), /*#__PURE__*/React.createElement(Campo, {
-    label: "¿Por qué? Escoja la categoría"
-  }, /*#__PURE__*/React.createElement("select", {
-    value: cat,
-    onChange: e => setCat(e.target.value)
-  }, CATEGORIAS.map(c => /*#__PURE__*/React.createElement("option", {
-    key: c
-  }, c)))), /*#__PURE__*/React.createElement("div", {
-    className: "dos"
-  }, /*#__PURE__*/React.createElement(Campo, {
-    label: "Puntos por persona"
-  }, /*#__PURE__*/React.createElement("input", {
-    type: "number",
-    value: puntos,
-    min: "1",
-    onChange: e => setPuntos(e.target.value)
-  })), /*#__PURE__*/React.createElement(Campo, {
-    label: "Proyecto o iniciativa (opcional)"
-  }, /*#__PURE__*/React.createElement("input", {
-    value: proyecto,
-    onChange: e => setProyecto(e.target.value),
-    placeholder: "Migración de inventario"
-  }))), /*#__PURE__*/React.createElement("div", {
-    className: "sugerido"
-  }, [10, 20, 40, 60].map(n => /*#__PURE__*/React.createElement("button", {
-    key: n,
-    onClick: () => setPuntos(n)
-  }, n))), /*#__PURE__*/React.createElement(Campo, {
-    label: "Motivo, en una frase"
-  }, /*#__PURE__*/React.createElement("textarea", {
-    rows: 3,
-    value: nota,
-    onChange: e => setNota(e.target.value),
-    placeholder: "Propuso el cambio que bajó el tiempo de despacho de 40 a 22 minutos."
-  })), /*#__PURE__*/React.createElement("button", {
-    className: "b oro",
-    onClick: enviar
-  }, "Otorgar ", sel.length > 0 && Number(puntos) > 0 ? `${miles(Number(puntos) * sel.length)} puntos en total` : "puntos"));
-}
-
 /* ====================== nominar ====================== */
 
 function Nominar({
@@ -2043,12 +1953,11 @@ function Nominar({
   apoyar,
   avisar
 }) {
-  const ciclo = cicloAbierto(datos);
+  const ciclo = cicloActual(datos);
   const [cat, setCat] = useState(CATEGORIAS[0]);
   const [persona, setPersona] = useState("");
+  const [proyecto, setProyecto] = useState("");
   const [motivo, setMotivo] = useState("");
-  const [apoyando, setApoyando] = useState(null);
-  const [motivoApoyo, setMotivoApoyo] = useState("");
   if (!ciclo) return /*#__PURE__*/React.createElement("div", {
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Nominar"), /*#__PURE__*/React.createElement("div", {
@@ -2076,11 +1985,13 @@ function Nominar({
         ciclo: ciclo.id,
         cat,
         persona,
+        proyecto: proyecto.trim(),
         motivo: motivo.trim()
       });
       avisar("Nominación registrada");
     }
     setPersona("");
+    setProyecto("");
     setMotivo("");
   };
   const nombreDe = pid => {
@@ -2112,6 +2023,12 @@ function Nominar({
     key: p.id,
     value: p.id
   }, p.nombre, yaEsta(p.id) ? " — ya nominado en esta categoría" : "")))), /*#__PURE__*/React.createElement(Campo, {
+    label: "Proyecto o iniciativa (opcional)"
+  }, /*#__PURE__*/React.createElement("input", {
+    value: proyecto,
+    onChange: e => setProyecto(e.target.value),
+    placeholder: "Migración del sistema de bodega"
+  })), /*#__PURE__*/React.createElement(Campo, {
     label: "¿Por qué? Sea concreto"
   }, /*#__PURE__*/React.createElement("textarea", {
     rows: 3,
@@ -2159,7 +2076,13 @@ function Nominar({
       style: {
         fontSize: 14
       }
-    }, nombreDe(n.persona)), /*#__PURE__*/React.createElement("div", {
+    }, nombreDe(n.persona)), n.proyecto && /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        color: "var(--verde)",
+        marginTop: 2
+      }
+    }, n.proyecto), /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 13.5,
         color: "var(--soft)",
@@ -2183,23 +2106,119 @@ function Votar({
   votar,
   avisar
 }) {
-  const ciclo = cicloAbierto(datos);
+  const ciclo = cicloActual(datos);
   if (!ciclo) return /*#__PURE__*/React.createElement("div", {
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Votar"), /*#__PURE__*/React.createElement("div", {
     className: "vacio"
   }, /*#__PURE__*/React.createElement("b", null, "No hay ciclo abierto"), "Coordinación abre el ciclo cuando corresponda."));
-  if (ciclo.estado !== "votacion") return /*#__PURE__*/React.createElement("div", {
+  const nombreDe = pid => {
+    var _datos$personas$find2;
+    return ((_datos$personas$find2 = datos.personas.find(p => p.id === pid)) === null || _datos$personas$find2 === void 0 ? void 0 : _datos$personas$find2.nombre) || "—";
+  };
+  if (ciclo.estado === "nominacion") return /*#__PURE__*/React.createElement("div", {
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Votar"), /*#__PURE__*/React.createElement("p", {
     className: "pie"
   }, "Ciclo ", ciclo.nombre), /*#__PURE__*/React.createElement("div", {
     className: "vacio"
-  }, /*#__PURE__*/React.createElement("b", null, ciclo.estado === "nominacion" ? "La votación todavía no abre" : "La votación ya cerró"), ciclo.estado === "nominacion" ? "Primero se recogen las nominaciones. Cuando Coordinación cierre esa etapa podrá votar." : "Coordinación está confirmando los ganadores."));
-  const nombreDe = pid => {
-    var _datos$personas$find2;
-    return ((_datos$personas$find2 = datos.personas.find(p => p.id === pid)) === null || _datos$personas$find2 === void 0 ? void 0 : _datos$personas$find2.nombre) || "—";
-  };
+  }, /*#__PURE__*/React.createElement("b", null, "La votación todavía no abre"), "Primero se recogen las nominaciones. Cuando Coordinación cierre esa etapa podrá votar."));
+
+  /* Votación cerrada: el jurado ve quién ganó y por qué, antes de que se envíen los puntos. */
+  if (ciclo.estado === "cerrado") return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "bloque"
+  }, /*#__PURE__*/React.createElement("h2", null, "Resultados · ", ciclo.nombre), /*#__PURE__*/React.createElement("p", {
+    className: "pie"
+  }, "La votación cerró y estos son los resultados.", ciclo.asignado ? " Los puntos ya se enviaron." : " Los puntos se envían cuando Coordinación lo confirme.")), CATEGORIAS.map(c => {
+    const lista = nominacionesDe(datos, ciclo.id, c);
+    if (!lista.length) return null;
+    const conteo = conteoVotos(datos, ciclo.id, c);
+    const orden = [...lista].sort((a, b) => (conteo[b.id] || 0) - (conteo[a.id] || 0));
+    return /*#__PURE__*/React.createElement("div", {
+      className: "bloque",
+      key: c
+    }, /*#__PURE__*/React.createElement("h2", null, c), /*#__PURE__*/React.createElement("p", {
+      className: "pie"
+    }, votosDe(datos, ciclo.id, c).length, " votos emitidos."), orden.map(n => {
+      var _ciclo$ganadores;
+      const gano = ((_ciclo$ganadores = ciclo.ganadores) === null || _ciclo$ganadores === void 0 ? void 0 : _ciclo$ganadores[c]) === n.id;
+      return /*#__PURE__*/React.createElement("div", {
+        key: n.id,
+        style: {
+          border: gano ? "1px solid var(--oro)" : "1px solid var(--linea)",
+          boxShadow: gano ? "inset 3px 0 0 var(--oro)" : "none",
+          background: gano ? "#FBF7EE" : "var(--panel)",
+          borderRadius: 2,
+          padding: "12px 14px",
+          marginBottom: 8
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "flex-start"
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          minWidth: 0
+        }
+      }, /*#__PURE__*/React.createElement("b", {
+        style: {
+          fontSize: 15
+        }
+      }, nombreDe(n.persona)), gano && /*#__PURE__*/React.createElement("span", {
+        className: "etq list",
+        style: {
+          marginLeft: 8
+        }
+      }, "Ganador"), n.proyecto && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: "var(--verde)",
+          marginTop: 2
+        }
+      }, n.proyecto), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13.5,
+          color: "var(--soft)",
+          marginTop: 3
+        }
+      }, n.motivo), n.apoyos.map((a, i) => /*#__PURE__*/React.createElement("div", {
+        key: i,
+        style: {
+          fontSize: 13,
+          color: "var(--soft)",
+          marginTop: 5,
+          paddingLeft: 10,
+          borderLeft: "2px solid var(--linea-2)"
+        }
+      }, a.motivo)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: "var(--soft)",
+          marginTop: 6
+        }
+      }, "Nominado por ", nombreDe(n.por))), /*#__PURE__*/React.createElement("div", {
+        style: {
+          textAlign: "right",
+          flex: "none"
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "num",
+        style: {
+          fontSize: 22,
+          fontWeight: 600,
+          color: gano ? "var(--oro)" : "var(--verde)"
+        }
+      }, conteo[n.id] || 0), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 11.5,
+          color: "var(--soft)"
+        }
+      }, (conteo[n.id] || 0) === 1 ? "voto" : "votos"))));
+    }));
+  }));
   const pendientes = CATEGORIAS.filter(c => nominacionesDe(datos, ciclo.id, c).length > 0 && !estaNominado(datos, ciclo.id, c, yo.id) && !miVoto(datos, ciclo.id, c, yo.id)).length;
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "bloque"
@@ -2261,7 +2280,13 @@ function Votar({
         style: {
           fontSize: 15
         }
-      }, nombreDe(n.persona)), /*#__PURE__*/React.createElement("div", {
+      }, nombreDe(n.persona)), n.proyecto && /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 13,
+          color: "var(--verde)",
+          marginTop: 2
+        }
+      }, n.proyecto), /*#__PURE__*/React.createElement("div", {
         style: {
           fontSize: 13.5,
           color: "var(--soft)",
@@ -2461,9 +2486,9 @@ function Ciclos({
     return /*#__PURE__*/React.createElement("div", {
       className: "bloque",
       key: c.id
-    }, /*#__PURE__*/React.createElement("h2", null, c.nombre, " · confirmar ganadores"), /*#__PURE__*/React.createElement("p", {
+    }, /*#__PURE__*/React.createElement("h2", null, c.nombre, " · resultados"), /*#__PURE__*/React.createElement("p", {
       className: "pie"
-    }, "Marque el ganador de cada categoría. La app muestra el conteo, pero la decisión la toma usted."), /*#__PURE__*/React.createElement(Tabla, {
+    }, "La votación cerró. El más votado de cada categoría ya quedó marcado como ganador; puede cambiarlo si hubo empate o algún criterio aparte. Los puntos todavía no se han enviado: nadie los tiene hasta que use el botón de abajo."), /*#__PURE__*/React.createElement(Tabla, {
       c: c,
       editable: true
     }), /*#__PURE__*/React.createElement("div", {
@@ -2477,15 +2502,15 @@ function Ciclos({
       style: {
         marginBottom: 0
       }
-    }, /*#__PURE__*/React.createElement("b", null, "Falta marcar ganador"), r.faltan.join(", "), ". Marque uno en cada categoría con nominados para poder acreditar.") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
+    }, /*#__PURE__*/React.createElement("b", null, "Falta marcar ganador"), r.faltan.join(", "), ". Marque uno en cada categoría con nominados para poder enviar los puntos.") : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", {
       style: {
         fontSize: 14,
         marginTop: 0
       }
-    }, "Se acreditarán ", /*#__PURE__*/React.createElement("b", null, miles(r.total), " puntos"), ": ", PUNTOS.nominado, " a cada uno de los", " ", r.nominados, " nominados, más ", EXTRA_GANADOR, " adicionales a los ", r.ganadores, " ganadores."), /*#__PURE__*/React.createElement("button", {
+    }, "Se enviarán ", /*#__PURE__*/React.createElement("b", null, miles(r.total), " puntos"), ": ", PUNTOS.nominado, " a cada uno de los", " ", r.nominados, " nominados, más ", EXTRA_GANADOR, " adicionales a los ", r.ganadores, " ganadores, que así llegan a ", PUNTOS.ganador, "."), /*#__PURE__*/React.createElement("button", {
       className: "b oro",
       onClick: () => setConfirmar(c)
-    }, "Asignar puntos del ciclo"))));
+    }, "Enviar puntos"))));
   }), cerrados.filter(c => c.asignado).map(c => /*#__PURE__*/React.createElement("div", {
     className: "bloque",
     key: c.id
@@ -2498,13 +2523,13 @@ function Ciclos({
     }
   }, /*#__PURE__*/React.createElement("h2", null, c.nombre), /*#__PURE__*/React.createElement("span", {
     className: "etq list"
-  }, "Puntos acreditados")), /*#__PURE__*/React.createElement("p", {
+  }, "Puntos enviados")), /*#__PURE__*/React.createElement("p", {
     className: "pie"
-  }, "Acreditado el ", fecha(c.asignadoFecha), "."), /*#__PURE__*/React.createElement(Tabla, {
+  }, "Puntos enviados el ", fecha(c.asignadoFecha), "."), /*#__PURE__*/React.createElement(Tabla, {
     c: c,
     editable: false
   }))), confirmar && /*#__PURE__*/React.createElement(Modal, {
-    titulo: "Asignar los puntos del ciclo",
+    titulo: "Enviar los puntos del ciclo",
     cerrar: () => setConfirmar(null),
     pie: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
       className: "b hueco",
@@ -2514,20 +2539,20 @@ function Ciclos({
       onClick: () => {
         const r = asignarPuntos(confirmar.id);
         setConfirmar(null);
-        avisar(r.error || `${miles(r.total)} puntos acreditados`);
+        avisar(r.error || `${miles(r.total)} puntos enviados`);
       }
-    }, "Sí, acreditar"))
+    }, "Sí, enviar los puntos"))
   }, /*#__PURE__*/React.createElement("p", {
     style: {
       marginTop: 0
     }
-  }, "Va a acreditar los puntos de ", /*#__PURE__*/React.createElement("b", null, confirmar.nombre), ". Cada movimiento queda en el historial de cada persona con la categoría y el ciclo."), /*#__PURE__*/React.createElement("p", {
+  }, "Va a enviar los puntos de ", /*#__PURE__*/React.createElement("b", null, confirmar.nombre), ". Hasta ahora nadie los tiene: entran al saldo de cada persona en este momento, con la categoría y el ciclo en su historial."), /*#__PURE__*/React.createElement("p", {
     style: {
       marginBottom: 0,
       color: "var(--soft)",
       fontSize: 14
     }
-  }, "Esto se hace una sola vez por ciclo. Si después hay que corregir algo, use un ajuste manual desde Otorgar puntos, para que quede el rastro.")));
+  }, "Esto se hace una sola vez por ciclo. Cada movimiento queda con su fecha, su categoría y quién lo envió, así que siempre se puede explicar de dónde salió cada punto.")));
 }
 
 /* ====================== resumen ====================== */
@@ -3369,6 +3394,11 @@ function Ajustes({
   reiniciar,
   limpiarHistorial
 }) {
+  const alternar = (pid, campo) => setDatos(d => _objectSpread(_objectSpread({}, d), {}, {
+    personas: d.personas.map(p => p.id === pid ? _objectSpread(_objectSpread({}, p), {}, {
+      [campo]: !p[campo]
+    }) : p)
+  }));
   const [c, setC] = useState(datos.config);
   const [nueva, setNueva] = useState("");
   const [confirma, setConfirma] = useState(false);
@@ -3408,6 +3438,51 @@ function Ajustes({
       empresa: e.target.value
     }))
   })))), /*#__PURE__*/React.createElement("div", {
+    className: "bloque"
+  }, /*#__PURE__*/React.createElement("h2", null, "Quién nomina y quién vota"), /*#__PURE__*/React.createElement("p", {
+    className: "pie"
+  }, "Marque aquí los permisos de cada persona. ", /*#__PURE__*/React.createElement("b", null, "Jurado"), " es quien vota entre los nominados. Los cambios se guardan solos."), /*#__PURE__*/React.createElement("div", {
+    className: "scroll"
+  }, /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "Persona"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: "center"
+    }
+  }, "Puede nominar"), /*#__PURE__*/React.createElement("th", {
+    style: {
+      textAlign: "center"
+    }
+  }, "Jurado · vota"))), /*#__PURE__*/React.createElement("tbody", null, datos.personas.filter(p => p.activo).map(p => /*#__PURE__*/React.createElement("tr", {
+    key: p.id
+  }, /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("b", null, p.nombre), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12.5,
+      color: "var(--soft)"
+    }
+  }, p.usuario, p.rol === "admin" ? " · Coordinación" : "")), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!p.nomina,
+    "aria-label": `${p.nombre} puede nominar`,
+    onChange: () => alternar(p.id, "nomina")
+  })), /*#__PURE__*/React.createElement("td", {
+    style: {
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: !!p.vota,
+    "aria-label": `${p.nombre} es jurado`,
+    onChange: () => alternar(p.id, "vota")
+  }))))))), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: "var(--soft)",
+      margin: "14px 0 0"
+    }
+  }, "Quien no tenga ninguna marca solo ve su saldo y el catálogo de premios. Un jurado nominado en una categoría no vota en esa categoría.")), /*#__PURE__*/React.createElement("div", {
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Mi contraseña"), /*#__PURE__*/React.createElement(Campo, {
     label: "Nueva contraseña (mínimo 6 caracteres)"
@@ -3517,10 +3592,12 @@ function Programa() {
     const base = inicial();
     const lista = x => Array.isArray(x) ? x : null;
     return {
-      personas: (lista(d.personas) || base.personas).map(p => _objectSpread({
-        nomina: false,
-        vota: false
-      }, p)),
+      /* Si vienen de una versión sin permisos, Coordinación arranca pudiendo
+         nominar y votar; el resto en blanco, para marcarlo en Ajustes. */
+      personas: (lista(d.personas) || base.personas).map(p => _objectSpread(_objectSpread({}, p), {}, {
+        nomina: typeof p.nomina === "boolean" ? p.nomina : p.rol === "admin",
+        vota: typeof p.vota === "boolean" ? p.vota : p.rol === "admin"
+      })),
       premios: (lista(d.premios) || base.premios).map(p => _objectSpread({
         icono: "mercancia",
         img: ""
@@ -3532,7 +3609,8 @@ function Programa() {
         estado: "cerrado"
       }, c)),
       nominaciones: (lista(d.nominaciones) || []).map(n => _objectSpread({
-        apoyos: []
+        apoyos: [],
+        proyecto: ""
       }, n)),
       votos: lista(d.votos) || [],
       movimientos: lista(d.movimientos) || [],
@@ -3602,14 +3680,37 @@ function Programa() {
     }]
   }));
   const avanzarCiclo = cicloId => setDatos(d => _objectSpread(_objectSpread({}, d), {}, {
-    ciclos: d.ciclos.map(c => c.id === cicloId ? _objectSpread(_objectSpread({}, c), {}, {
-      estado: ETAPAS[c.estado].siguiente || c.estado
-    }) : c)
+    ciclos: d.ciclos.map(c => {
+      if (c.id !== cicloId) return c;
+      const siguiente = ETAPAS[c.estado].siguiente || c.estado;
+      if (siguiente !== "cerrado") return _objectSpread(_objectSpread({}, c), {}, {
+        estado: siguiente
+      });
+      /* Al cerrar la votación el más votado queda propuesto como ganador.
+         Coordinación lo puede cambiar antes de enviar los puntos. */
+      const ganadores = _objectSpread({}, c.ganadores || {});
+      CATEGORIAS.forEach(cat => {
+        if (ganadores[cat]) return;
+        const lista = (d.nominaciones || []).filter(n => n.ciclo === c.id && n.cat === cat);
+        if (!lista.length) return;
+        const conteo = {};
+        (d.votos || []).filter(v => v.ciclo === c.id && v.cat === cat).forEach(v => {
+          conteo[v.nominacion] = (conteo[v.nominacion] || 0) + 1;
+        });
+        const top = [...lista].sort((a, b) => (conteo[b.id] || 0) - (conteo[a.id] || 0))[0];
+        if (top) ganadores[cat] = top.id;
+      });
+      return _objectSpread(_objectSpread({}, c), {}, {
+        estado: siguiente,
+        ganadores
+      });
+    })
   }));
   const nominar = ({
     ciclo,
     cat,
     persona,
+    proyecto,
     motivo
   }) => setDatos(d => _objectSpread(_objectSpread({}, d), {}, {
     nominaciones: [...d.nominaciones, {
@@ -3618,6 +3719,7 @@ function Programa() {
       cat,
       persona,
       por: yo.id,
+      proyecto: proyecto || "",
       motivo,
       fecha: new Date().toISOString(),
       apoyos: []
@@ -3677,6 +3779,7 @@ function Programa() {
         puntos: PUNTOS.nominado,
         cat: n.cat,
         ciclo: cicloId,
+        proyecto: n.proyecto || "",
         nota: `Nominado a ${n.cat} · ${c.nombre}`,
         fecha: ahora,
         por: yo.id
@@ -3689,6 +3792,7 @@ function Programa() {
           puntos: EXTRA_GANADOR,
           cat: n.cat,
           ciclo: cicloId,
+          proyecto: n.proyecto || "",
           nota: `Ganador de ${n.cat} · ${c.nombre}`,
           fecha: ahora,
           por: yo.id
@@ -3706,29 +3810,6 @@ function Programa() {
     return {
       total
     };
-  };
-  const otorgar = ({
-    personas,
-    puntos,
-    cat,
-    proyecto,
-    nota
-  }) => {
-    const ahora = new Date().toISOString();
-    const nuevos = personas.map(persona => ({
-      id: id(),
-      persona,
-      tipo: "otorgado",
-      puntos,
-      cat,
-      proyecto,
-      nota,
-      fecha: ahora,
-      por: yo.id
-    }));
-    setDatos(d => _objectSpread(_objectSpread({}, d), {}, {
-      movimientos: [...nuevos, ...d.movimientos]
-    }));
   };
   const canjear = (personaId, premioId) => {
     const premio = datos.premios.find(p => p.id === premioId);
@@ -3848,7 +3929,7 @@ function Programa() {
   const pendientes = (datos.canjes || []).filter(c => c.estado === "Pendiente").length;
   const ciclo = cicloAbierto(datos);
   const porAcreditar = (datos.ciclos || []).filter(c => c.estado === "cerrado" && !c.asignado).length;
-  const secciones = esAdmin ? [["resumen", "Resumen"], ["ciclos", `Ciclos${porAcreditar ? ` (${porAcreditar})` : ""}`], ...(yo.nomina ? [["nominar", "Nominar"]] : []), ...(yo.vota ? [["votar", "Votar"]] : []), ["otorgar", "Otorgar puntos"], ["personas", "Personas"], ["premios", "Premios"], ["canjes", `Canjes${pendientes ? ` (${pendientes})` : ""}`], ["ajustes", "Ajustes"]] : [["saldo", "Mis puntos"], ...(yo.nomina ? [["nominar", "Nominar"]] : []), ...(yo.vota ? [["votar", "Votar"]] : []), ["canjes", "Mis canjes"]];
+  const secciones = esAdmin ? [["resumen", "Resumen"], ["ciclos", `Ciclos${porAcreditar ? ` (${porAcreditar})` : ""}`], ...(yo.nomina ? [["nominar", "Nominar"]] : []), ...(yo.vota ? [["votar", "Votar"]] : []), ["personas", "Personas"], ["premios", "Premios"], ["canjes", `Canjes${pendientes ? ` (${pendientes})` : ""}`], ["ajustes", "Ajustes"]] : [["saldo", "Mis puntos"], ...(yo.nomina ? [["nominar", "Nominar"]] : []), ...(yo.vota ? [["votar", "Votar"]] : []), ["canjes", "Mis canjes"]];
   return /*#__PURE__*/React.createElement("div", {
     className: "rec"
   }, /*#__PURE__*/React.createElement("style", null, CSS), /*#__PURE__*/React.createElement("header", {
@@ -3917,10 +3998,6 @@ function Programa() {
     avanzarCiclo: avanzarCiclo,
     fijarGanador: fijarGanador,
     asignarPuntos: asignarPuntos,
-    avisar: avisar
-  }), esAdmin && seccion === "otorgar" && /*#__PURE__*/React.createElement(Otorgar, {
-    datos: datos,
-    otorgar: otorgar,
     avisar: avisar
   }), esAdmin && seccion === "personas" && /*#__PURE__*/React.createElement(Personas, {
     datos: datos,
