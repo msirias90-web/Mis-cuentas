@@ -1520,6 +1520,86 @@ function Barras({
     fill: "#06302B"
   }, barras));
 }
+
+/* Si algo falla al dibujar, esto evita que la pantalla quede en blanco:
+   muestra el error y ofrece una salida. */
+class Barrera extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      error: null
+    };
+  }
+  static getDerivedStateFromError(error) {
+    return {
+      error
+    };
+  }
+  componentDidCatch(error, info) {
+    if (window.console) console.error(error, info);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    const e = this.state.error;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "rec",
+      style: {
+        padding: "40px 22px"
+      }
+    }, /*#__PURE__*/React.createElement("style", null, CSS), /*#__PURE__*/React.createElement("div", {
+      style: {
+        maxWidth: 620,
+        margin: "0 auto"
+      }
+    }, /*#__PURE__*/React.createElement("h1", {
+      style: {
+        fontSize: 24,
+        marginBottom: 10
+      }
+    }, "Algo falló al mostrar esta pantalla"), /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: "var(--soft)",
+        fontSize: 14.5
+      }
+    }, "Lo más común es que el navegador tenga guardada información de una versión anterior. Con el botón de abajo se borra lo guardado y la aplicación vuelve a empezar con los datos de ejemplo."), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 10,
+        flexWrap: "wrap",
+        margin: "18px 0"
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "b oro",
+      onClick: () => {
+        try {
+          localStorage.removeItem(LLAVE);
+          localStorage.removeItem(LLAVE_IMG);
+        } catch (x) {/* el navegador puede bloquear el almacenamiento */}
+        location.reload();
+      }
+    }, "Borrar lo guardado y reiniciar"), /*#__PURE__*/React.createElement("button", {
+      className: "b hueco",
+      onClick: () => location.reload()
+    }, "Solo recargar")), /*#__PURE__*/React.createElement("details", null, /*#__PURE__*/React.createElement("summary", {
+      style: {
+        fontSize: 13.5,
+        color: "var(--soft)",
+        cursor: "pointer"
+      }
+    }, "Detalle técnico"), /*#__PURE__*/React.createElement("pre", {
+      style: {
+        background: "var(--panel)",
+        border: "1px solid var(--linea)",
+        borderRadius: 3,
+        padding: 12,
+        fontSize: 12,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+        marginTop: 10
+      }
+    }, e && (e.stack || e.message) || String(e)))));
+  }
+}
 function Campo({
   label,
   children
@@ -1566,9 +1646,9 @@ function Modal({
 /* ---------------- ciclos, nominaciones y votos ---------------- */
 
 /** El ciclo en curso: el único que no está cerrado. */
-const cicloAbierto = datos => datos.ciclos.find(c => c.estado !== "cerrado") || null;
-const nominacionesDe = (datos, cicloId, cat) => datos.nominaciones.filter(n => n.ciclo === cicloId && (!cat || n.cat === cat));
-const votosDe = (datos, cicloId, cat) => datos.votos.filter(v => v.ciclo === cicloId && (!cat || v.cat === cat));
+const cicloAbierto = datos => (datos.ciclos || []).find(c => c.estado !== "cerrado") || null;
+const nominacionesDe = (datos, cicloId, cat) => (datos.nominaciones || []).filter(n => n.ciclo === cicloId && (!cat || n.cat === cat));
+const votosDe = (datos, cicloId, cat) => (datos.votos || []).filter(v => v.ciclo === cicloId && (!cat || v.cat === cat));
 
 /** Cuántos votos lleva cada nominación de una categoría. */
 const conteoVotos = (datos, cicloId, cat) => {
@@ -1580,7 +1660,7 @@ const conteoVotos = (datos, cicloId, cat) => {
 };
 
 /** El voto que ya emitió esta persona en una categoría, si lo hay. */
-const miVoto = (datos, cicloId, cat, personaId) => datos.votos.find(v => v.ciclo === cicloId && v.cat === cat && v.por === personaId) || null;
+const miVoto = (datos, cicloId, cat, personaId) => (datos.votos || []).find(v => v.ciclo === cicloId && v.cat === cat && v.por === personaId) || null;
 
 /** Un jurado nominado en una categoría no vota en esa categoría. */
 const estaNominado = (datos, cicloId, cat, personaId) => nominacionesDe(datos, cicloId, cat).some(n => n.persona === personaId);
@@ -1604,8 +1684,8 @@ const ETAPAS = {
 
 /* Referencia de catálogo: tres letras de la categoría más el costo, como un número de parte. */
 const refPremio = p => `${(p.cat || "GEN").replace(/[^A-Za-zÁÉÍÓÚÑ]/g, "").slice(0, 3).toUpperCase()}-${String(p.costo).padStart(4, "0")}`;
-const saldoDe = (datos, personaId) => datos.movimientos.filter(m => m.persona === personaId).reduce((s, m) => s + m.puntos, 0);
-const ganadosDe = (datos, personaId) => datos.movimientos.filter(m => m.persona === personaId && m.puntos > 0).reduce((s, m) => s + m.puntos, 0);
+const saldoDe = (datos, personaId) => (datos.movimientos || []).filter(m => m.persona === personaId).reduce((s, m) => s + m.puntos, 0);
+const ganadosDe = (datos, personaId) => (datos.movimientos || []).filter(m => m.persona === personaId && m.puntos > 0).reduce((s, m) => s + m.puntos, 0);
 
 /* ====================== entrada ====================== */
 
@@ -2234,14 +2314,14 @@ function Ciclos({
   const [nombre, setNombre] = useState("");
   const [confirmar, setConfirmar] = useState(null);
   const ciclo = cicloAbierto(datos);
-  const cerrados = datos.ciclos.filter(c => c.estado === "cerrado");
+  const cerrados = (datos.ciclos || []).filter(c => c.estado === "cerrado");
   const nombreDe = pid => {
     var _datos$personas$find3;
     return ((_datos$personas$find3 = datos.personas.find(p => p.id === pid)) === null || _datos$personas$find3 === void 0 ? void 0 : _datos$personas$find3.nombre) || "—";
   };
 
   /* por acreditar: cerrado y sin asignar */
-  const porAcreditar = datos.ciclos.filter(c => c.estado === "cerrado" && !c.asignado);
+  const porAcreditar = (datos.ciclos || []).filter(c => c.estado === "cerrado" && !c.asignado);
   const resumenAcreditacion = c => {
     const noms = nominacionesDe(datos, c.id);
     const ganadores = Object.values(c.ganadores || {}).filter(Boolean);
@@ -3399,7 +3479,7 @@ function Ajustes({
 
 /* ====================== app ====================== */
 
-function App() {
+function Programa() {
   const [datos, setDatos] = useState(null);
   const [imgs, setImgs] = useState({});
   const [cargando, setCargando] = useState(true);
@@ -3429,6 +3509,37 @@ function App() {
     setAviso(m);
     setTimeout(() => setAviso(""), 2600);
   };
+
+  /** Lo guardado puede venir de una versión anterior que no tenía ciclos ni
+      permisos. Esto completa lo que falte para que nada se caiga al abrir. */
+  const normalizar = d => {
+    if (!d || typeof d !== "object") return inicial();
+    const base = inicial();
+    const lista = x => Array.isArray(x) ? x : null;
+    return {
+      personas: (lista(d.personas) || base.personas).map(p => _objectSpread({
+        nomina: false,
+        vota: false
+      }, p)),
+      premios: (lista(d.premios) || base.premios).map(p => _objectSpread({
+        icono: "mercancia",
+        img: ""
+      }, p)),
+      ciclos: (lista(d.ciclos) || []).map(c => _objectSpread({
+        ganadores: {},
+        asignado: false,
+        asignadoFecha: null,
+        estado: "cerrado"
+      }, c)),
+      nominaciones: (lista(d.nominaciones) || []).map(n => _objectSpread({
+        apoyos: []
+      }, n)),
+      votos: lista(d.votos) || [],
+      movimientos: lista(d.movimientos) || [],
+      canjes: lista(d.canjes) || [],
+      config: _objectSpread(_objectSpread({}, base.config), d.config || {})
+    };
+  };
   useEffect(() => {
     (async () => {
       let d = null,
@@ -3445,8 +3556,8 @@ function App() {
       } catch (_unused3) {
         m = {};
       }
-      setDatos(d || inicial());
-      setImgs(m);
+      setDatos(normalizar(d));
+      setImgs(m && typeof m === "object" ? m : {});
       setCargando(false);
     })();
   }, []);
@@ -3734,9 +3845,9 @@ function App() {
     }));
   }
   const esAdmin = yo.rol === "admin";
-  const pendientes = datos.canjes.filter(c => c.estado === "Pendiente").length;
+  const pendientes = (datos.canjes || []).filter(c => c.estado === "Pendiente").length;
   const ciclo = cicloAbierto(datos);
-  const porAcreditar = datos.ciclos.filter(c => c.estado === "cerrado" && !c.asignado).length;
+  const porAcreditar = (datos.ciclos || []).filter(c => c.estado === "cerrado" && !c.asignado).length;
   const secciones = esAdmin ? [["resumen", "Resumen"], ["ciclos", `Ciclos${porAcreditar ? ` (${porAcreditar})` : ""}`], ...(yo.nomina ? [["nominar", "Nominar"]] : []), ...(yo.vota ? [["votar", "Votar"]] : []), ["otorgar", "Otorgar puntos"], ["personas", "Personas"], ["premios", "Premios"], ["canjes", `Canjes${pendientes ? ` (${pendientes})` : ""}`], ["ajustes", "Ajustes"]] : [["saldo", "Mis puntos"], ...(yo.nomina ? [["nominar", "Nominar"]] : []), ...(yo.vota ? [["votar", "Votar"]] : []), ["canjes", "Mis canjes"]];
   return /*#__PURE__*/React.createElement("div", {
     className: "rec"
@@ -3836,6 +3947,9 @@ function App() {
   })), aviso && /*#__PURE__*/React.createElement("div", {
     className: "aviso"
   }, aviso));
+}
+function App() {
+  return /*#__PURE__*/React.createElement(Barrera, null, /*#__PURE__*/React.createElement(Programa, null));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
   } catch (e) {
