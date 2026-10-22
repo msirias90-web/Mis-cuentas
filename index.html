@@ -581,20 +581,32 @@ const CSS = `
   font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;margin-left:9px;vertical-align:2px;}
 .rec .votos-tag{font-family:var(--mono);font-size:21px;font-weight:600;color:var(--verde);}
 .rec .votos-tag.oro{color:var(--oro);}
-.rec .cuenta{font-family:var(--mono);font-size:clamp(60px,13vw,120px);font-weight:600;color:var(--oro);
-  text-align:center;line-height:1;animation:pum .9s cubic-bezier(.2,.9,.3,1.2) both;}
-.rec .cuenta-pie{text-align:center;font-size:15px;color:var(--soft);margin-top:6px;letter-spacing:.02em;}
-.rec .anuncio{background:var(--verde);border-radius:4px;padding:26px 24px;text-align:center;margin-bottom:16px;
-  position:relative;overflow:hidden;animation:gana-entra .6s cubic-bezier(.2,.9,.3,1.1) both;}
-.rec .anuncio:before{content:"";position:absolute;inset:-40%;
-  background:conic-gradient(from 0deg, rgba(175,134,46,0) 0deg, rgba(217,190,121,.26) 60deg, rgba(175,134,46,0) 120deg);
-  animation:gira 5s linear infinite;}
-.rec .anuncio > *{position:relative;}
-.rec .anuncio .rotulo{font-size:13px;color:#A9B5B0;letter-spacing:.05em;}
-.rec .anuncio .quien-gana{font-size:clamp(28px,6vw,52px);font-weight:700;color:var(--oro-claro);
-  line-height:1.05;margin:6px 0 8px;letter-spacing:-.02em;}
-.rec .anuncio .cat-gana{font-size:15px;color:#EDE7DA;}
-.rec .anuncio .votos-gana{font-family:var(--mono);font-size:14px;color:#A9B5B0;margin-top:10px;}
+.rec .escena{position:fixed;inset:0;z-index:98;background:var(--verde);color:#EDE7DA;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:28px 22px;text-align:center;overflow:hidden;}
+.rec .escena:before{content:"";position:absolute;inset:-45%;
+  background:conic-gradient(from 0deg,rgba(175,134,46,0) 0deg,rgba(217,190,121,.22) 70deg,rgba(175,134,46,0) 140deg);
+  animation:gira 6s linear infinite;}
+.rec .escena > *{position:relative;z-index:1;}
+.rec .escena .cat-escena{font-size:clamp(15px,2.4vw,22px);color:#A9B5B0;letter-spacing:.06em;margin-bottom:10px;}
+.rec .cuenta{font-family:var(--mono);font-size:clamp(90px,26vw,240px);font-weight:600;color:var(--oro-claro);
+  line-height:1;animation:pum .85s cubic-bezier(.2,.9,.3,1.2) both;}
+.rec .cuenta-pie{font-size:clamp(16px,2.6vw,26px);color:#A9B5B0;margin-top:14px;}
+.rec .girando{font-size:clamp(30px,7vw,68px);font-weight:700;color:#EDE7DA;line-height:1.1;
+  min-height:1.2em;letter-spacing:-.02em;}
+.rec .rotulo-gana{font-size:clamp(14px,2.2vw,20px);color:var(--oro-claro);letter-spacing:.14em;
+  text-transform:uppercase;margin-bottom:12px;}
+.rec .nombre-gana{font-size:clamp(40px,11vw,124px);font-weight:700;color:var(--oro-claro);
+  line-height:1;letter-spacing:-.03em;margin-bottom:16px;animation:gana-entra .6s cubic-bezier(.2,.9,.3,1.1) both;}
+.rec .motivo-gana{font-size:clamp(14px,2.2vw,21px);color:#C8D0CD;max-width:46ch;margin:0 auto 10px;line-height:1.45;}
+.rec .votos-gana{font-family:var(--mono);font-size:clamp(13px,1.9vw,17px);color:#A9B5B0;}
+.rec .escena .cerrar{margin-top:30px;}
+.rec .altavoz{position:absolute;top:18px;right:20px;z-index:2;background:transparent;
+  border:1px solid rgba(233,220,197,.32);color:#A9B5B0;padding:6px 13px;border-radius:20px;
+  font-size:12.5px;font-family:var(--ui);}
+.rec .altavoz:hover{border-color:var(--oro-claro);color:var(--oro-claro);}
+.rec .escena .b.hueco{background:transparent;color:#EDE7DA;border-color:rgba(233,220,197,.4);}
+.rec .escena .b.hueco:hover{border-color:var(--oro-claro);color:var(--oro-claro);background:transparent;}
 
 @keyframes pum{0%{transform:scale(.5);opacity:0;}55%{transform:scale(1.12);opacity:1;}100%{transform:scale(1);opacity:1;}}
 @keyframes gira{to{transform:rotate(360deg);}}
@@ -616,9 +628,7 @@ const CSS = `
 
 @media (prefers-reduced-motion:reduce){
   .rec .confeti{display:none;}
-  .rec .nominado.gana,.rec .anuncio,.rec .cuenta{animation:none;}
-  .rec .anuncio:before{display:none;}
-}
+  .rec .nominado.gana,  }
 
 @media (max-width:820px){
   .rec .tablero{grid-template-columns:1fr;}
@@ -2011,6 +2021,106 @@ const sinMovimiento = () => {
   }
 };
 
+/* ---------------- sonido de la revelación ----------------
+   El redoble y el platillo se sintetizan en el momento con la API de audio
+   del navegador: no hace falta ningún archivo, ni descargar nada. */
+
+let ctxAudio = null;
+let sonidoActivo = true;
+
+/** Prepara el audio dentro del clic, que es cuando el navegador lo permite. */
+function prepararAudio() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!ctxAudio) ctxAudio = new AC();
+    if (ctxAudio.state === "suspended") ctxAudio.resume();
+    return ctxAudio;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Un golpe seco de tambor: ruido corto filtrado, que cae rápido. */
+function golpe(ctx, destino, t, volumen) {
+  const dur = 0.06;
+  const buf = ctx.createBuffer(1, Math.max(1, Math.ceil(ctx.sampleRate * dur)), ctx.sampleRate);
+  const datos = buf.getChannelData(0);
+  for (let i = 0; i < datos.length; i++) {
+    datos[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / datos.length, 1.4);
+  }
+  const fuente = ctx.createBufferSource();
+  fuente.buffer = buf;
+  const filtro = ctx.createBiquadFilter();
+  filtro.type = "bandpass";
+  filtro.frequency.value = 1900;
+  filtro.Q.value = 0.7;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(volumen, t);
+  g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  fuente.connect(filtro);
+  filtro.connect(g);
+  g.connect(destino);
+  fuente.start(t);
+  fuente.stop(t + dur);
+}
+
+/** El redoble: golpes muy seguidos que van subiendo de intensidad. */
+function redoble(ctx, destino, desde, duracion) {
+  const paso = 0.042; // unos 24 golpes por segundo
+  let t = desde,
+    i = 0;
+  while (t < desde + duracion) {
+    const avance = (t - desde) / duracion;
+    const vol = (i % 2 === 0 ? 0.17 : 0.1) * (0.55 + 0.45 * avance);
+    golpe(ctx, destino, t, vol);
+    t += paso;
+    i++;
+  }
+}
+
+/** El platillo del final, con su cola larga. */
+function platillo(ctx, destino, t) {
+  const dur = 1.9;
+  const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
+  const datos = buf.getChannelData(0);
+  for (let i = 0; i < datos.length; i++) {
+    datos[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / datos.length, 1.7);
+  }
+  const fuente = ctx.createBufferSource();
+  fuente.buffer = buf;
+  const alto = ctx.createBiquadFilter();
+  alto.type = "highpass";
+  alto.frequency.value = 3800;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.26, t + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  fuente.connect(alto);
+  alto.connect(g);
+  g.connect(destino);
+  fuente.start(t);
+  fuente.stop(t + dur);
+}
+
+/** Acorde corto de celebración, encima del platillo. */
+function fanfarria(ctx, destino, t) {
+  [523.25, 659.25, 783.99, 1046.5].forEach((hz, i) => {
+    const osc = ctx.createOscillator();
+    osc.type = "triangle";
+    osc.frequency.value = hz;
+    const g = ctx.createGain();
+    const inicio = t + i * 0.055;
+    g.gain.setValueAtTime(0.0001, inicio);
+    g.gain.exponentialRampToValueAtTime(0.085, inicio + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0008, inicio + 1.3);
+    osc.connect(g);
+    g.connect(destino);
+    osc.start(inicio);
+    osc.stop(inicio + 1.35);
+  });
+}
+
 /** Lluvia de confeti en los colores de la marca. */
 function Confeti({
   piezas = 46
@@ -2047,6 +2157,142 @@ function Confeti({
   })));
 }
 
+/** La revelación, a pantalla completa, para proyectar en la reunión. */
+function EscenaGanador({
+  datos,
+  ciclo,
+  cat,
+  lista,
+  conteo,
+  ganador,
+  cerrar,
+  alTerminar
+}) {
+  const [fase, setFase] = useState("cuenta");
+  const [numero, setNumero] = useState(3);
+  const [marca, setMarca] = useState(0);
+  const [conSonido, setConSonido] = useState(sonidoActivo);
+  const relojes = useRef([]);
+  const mezcla = useRef(null);
+  const nombreDe = pid => {
+    const p = datos.personas.find(x => x.id === pid);
+    return p ? p.nombre : "—";
+  };
+  useEffect(() => {
+    if (sinMovimiento()) {
+      setFase("revelado");
+      alTerminar();
+      return;
+    }
+    let t = 0;
+    [2, 1].forEach(n => {
+      t += 850;
+      relojes.current.push(setTimeout(() => setNumero(n), t));
+    });
+    t += 850;
+    relojes.current.push(setTimeout(() => setFase("sorteo"), t));
+    const pasos = Math.max(14, lista.length * 6);
+    for (let i = 0; i < pasos; i++) {
+      t += 60 + Math.round(Math.pow(i / pasos, 2.7) * 300);
+      relojes.current.push(setTimeout(() => setMarca(i % lista.length), t));
+    }
+    const final = t + 360;
+    relojes.current.push(setTimeout(() => {
+      setFase("revelado");
+      alTerminar();
+    }, final));
+
+    /* El redoble acompaña toda la espera y cierra con el platillo.
+       Si el audio no está disponible, la revelación sigue igual. */
+    if (conSonido) {
+      try {
+        const ctx = prepararAudio();
+        if (ctx) {
+          const maestro = ctx.createGain();
+          maestro.gain.value = 1;
+          maestro.connect(ctx.destination);
+          mezcla.current = maestro;
+          const ahora = ctx.currentTime + 0.06;
+          redoble(ctx, maestro, ahora, final / 1000);
+          platillo(ctx, maestro, ahora + final / 1000);
+          fanfarria(ctx, maestro, ahora + final / 1000 + 0.03);
+        }
+      } catch (e) {/* sin sonido, pero la revelación continúa */}
+    }
+    return () => {
+      relojes.current.forEach(clearTimeout);
+      callar();
+    };
+  }, []);
+
+  /** Corta lo que esté sonando, sin esperar a que termine. */
+  const callar = () => {
+    const m = mezcla.current;
+    if (!m) return;
+    try {
+      const ctx = ctxAudio;
+      m.gain.cancelScheduledValues(ctx.currentTime);
+      m.gain.setValueAtTime(m.gain.value, ctx.currentTime);
+      m.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
+      setTimeout(() => {
+        try {
+          m.disconnect();
+        } catch (e) {}
+      }, 220);
+    } catch (e) {/* nada que cortar */}
+    mezcla.current = null;
+  };
+  useEffect(() => {
+    const esc = e => e.key === "Escape" && cerrar();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [cerrar]);
+  const total = votosDe(datos, ciclo.id, cat).length;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "escena",
+    role: "dialog",
+    "aria-label": `Ganador de ${cat}`
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "altavoz",
+    "aria-pressed": conSonido,
+    "aria-label": conSonido ? "Silenciar el redoble" : "Activar el redoble",
+    onClick: () => {
+      const nuevo = !conSonido;
+      sonidoActivo = nuevo;
+      setConSonido(nuevo);
+      if (!nuevo) callar();
+    }
+  }, conSonido ? "♪ Sonido" : "Sin sonido"), /*#__PURE__*/React.createElement("div", {
+    className: "cat-escena"
+  }, cat, " · ", ciclo.nombre), fase === "cuenta" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "cuenta",
+    key: numero
+  }, numero), /*#__PURE__*/React.createElement("div", {
+    className: "cuenta-pie"
+  }, "Y el ganador es…")), fase === "sorteo" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "girando"
+  }, nombreDe(lista[marca].persona)), /*#__PURE__*/React.createElement("div", {
+    className: "cuenta-pie"
+  }, "Y el ganador es…")), fase === "revelado" && ganador && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "rotulo-gana"
+  }, "Ganador"), /*#__PURE__*/React.createElement("div", {
+    className: "nombre-gana"
+  }, nombreDe(ganador.persona)), ganador.proyecto && /*#__PURE__*/React.createElement("div", {
+    className: "motivo-gana"
+  }, /*#__PURE__*/React.createElement("b", null, ganador.proyecto)), /*#__PURE__*/React.createElement("div", {
+    className: "motivo-gana"
+  }, ganador.motivo), /*#__PURE__*/React.createElement("div", {
+    className: "votos-gana"
+  }, conteo[ganador.id] || 0, " de ", total, " ", total === 1 ? "voto" : "votos"), /*#__PURE__*/React.createElement("div", {
+    className: "cerrar"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "b hueco",
+    onClick: cerrar
+  }, "Cerrar")), !sinMovimiento() && /*#__PURE__*/React.createElement(Confeti, {
+    piezas: 70
+  })));
+}
+
 /** Una categoría: primero los nominados, y el ganador solo cuando se revela. */
 function CategoriaResultado({
   datos,
@@ -2057,51 +2303,12 @@ function CategoriaResultado({
   const lista = nominacionesDe(datos, ciclo.id, cat);
   const conteo = conteoVotos(datos, ciclo.id, cat);
   const ganadorId = ciclo.ganadores && ciclo.ganadores[cat];
-  const [fase, setFase] = useState("oculto"); // oculto · cuenta · sorteo · revelado
-  const [marca, setMarca] = useState(-1);
-  const [numero, setNumero] = useState(3);
-  const temporizadores = useRef([]);
-  useEffect(() => () => temporizadores.current.forEach(clearTimeout), []);
+  const ganador = lista.find(n => n.id === ganadorId) || null;
+  const [enEscena, setEnEscena] = useState(false);
+  const [revelado, setRevelado] = useState(false);
   const nombreDe = pid => {
     const p = datos.personas.find(x => x.id === pid);
     return p ? p.nombre : "—";
-  };
-  const idxGanador = lista.findIndex(n => n.id === ganadorId);
-  const ganador = lista[idxGanador] || null;
-  const revelar = () => {
-    if (!ganadorId || idxGanador < 0) return;
-    if (sinMovimiento()) {
-      setFase("revelado");
-      setMarca(idxGanador);
-      return;
-    }
-
-    /* Primero la cuenta regresiva, después el recorrido que va frenando. */
-    setFase("cuenta");
-    setNumero(3);
-    let t = 0;
-    [2, 1].forEach(n => {
-      t += 800;
-      temporizadores.current.push(setTimeout(() => setNumero(n), t));
-    });
-    t += 800;
-    temporizadores.current.push(setTimeout(() => setFase("sorteo"), t));
-    const pasos = Math.max(12, lista.length * 5);
-    for (let i = 0; i < pasos; i++) {
-      t += 65 + Math.round(Math.pow(i / pasos, 2.6) * 260);
-      temporizadores.current.push(setTimeout(() => setMarca(i % lista.length), t));
-    }
-    temporizadores.current.push(setTimeout(() => {
-      setMarca(idxGanador);
-      setFase("revelado");
-    }, t + 340));
-  };
-  const reiniciar = () => {
-    temporizadores.current.forEach(clearTimeout);
-    temporizadores.current = [];
-    setFase("oculto");
-    setMarca(-1);
-    setNumero(3);
   };
   if (!lista.length) return /*#__PURE__*/React.createElement("div", {
     className: "bloque"
@@ -2111,7 +2318,6 @@ function CategoriaResultado({
       marginBottom: 0
     }
   }, "Nadie fue nominado en esta categoría."));
-  const revelado = fase === "revelado";
   return /*#__PURE__*/React.createElement("div", {
     className: "bloque"
   }, /*#__PURE__*/React.createElement("div", {
@@ -2121,44 +2327,13 @@ function CategoriaResultado({
       fontSize: 13,
       color: "var(--soft)"
     }
-  }, lista.length, " ", lista.length === 1 ? "nominado" : "nominados", revelado && ` · ${votosDe(datos, ciclo.id, cat).length} votos`)), fase === "cuenta" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      margin: "20px 0 12px"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "cuenta",
-    key: numero
-  }, numero), /*#__PURE__*/React.createElement("div", {
-    className: "cuenta-pie"
-  }, "Y el ganador es…")), fase === "sorteo" && /*#__PURE__*/React.createElement("div", {
-    style: {
-      margin: "20px 0 12px"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "cuenta",
-    style: {
-      animation: "none"
-    }
-  }, "★"), /*#__PURE__*/React.createElement("div", {
-    className: "cuenta-pie"
-  }, "Y el ganador es…")), revelado && ganador && /*#__PURE__*/React.createElement("div", {
-    className: "anuncio"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "rotulo"
-  }, "Ganador"), /*#__PURE__*/React.createElement("div", {
-    className: "quien-gana"
-  }, nombreDe(ganador.persona)), /*#__PURE__*/React.createElement("div", {
-    className: "cat-gana"
-  }, cat), /*#__PURE__*/React.createElement("div", {
-    className: "votos-gana"
-  }, conteo[ganador.id] || 0, " de ", votosDe(datos, ciclo.id, cat).length, " votos")), /*#__PURE__*/React.createElement("div", {
+  }, lista.length, " ", lista.length === 1 ? "nominado" : "nominados", revelado && ` · ${votosDe(datos, ciclo.id, cat).length} votos`)), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 12
     }
-  }, lista.map((n, i) => {
+  }, lista.map(n => {
     const gana = revelado && n.id === ganadorId;
     const clases = ["nominado"];
-    if (fase === "sorteo" && marca === i) clases.push("sorteo");
     if (revelado && !gana) clases.push("apagado");
     if (gana) clases.push("gana");
     return /*#__PURE__*/React.createElement("div", {
@@ -2212,53 +2387,71 @@ function CategoriaResultado({
       flexWrap: "wrap",
       alignItems: "center"
     }
-  }, fase === "oculto" && (puedeRevelar && ganadorId ? /*#__PURE__*/React.createElement("button", {
+  }, !revelado && (puedeRevelar && ganador ? /*#__PURE__*/React.createElement("button", {
     className: "b oro",
-    onClick: revelar
+    onClick: () => {
+      prepararAudio();
+      setEnEscena(true);
+    }
   }, "Ver ganador") : /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 13.5,
       color: "var(--soft)"
     }
-  }, ganadorId ? "El ganador se revela en la reunión." : "Coordinación todavía no marca al ganador.")), (fase === "cuenta" || fase === "sorteo") && /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 13.5,
-      color: "var(--soft)"
-    }
-  }, "Revelando…"), revelado && /*#__PURE__*/React.createElement("button", {
+  }, ganador ? "El ganador se revela en la reunión." : "Coordinación todavía no marca al ganador.")), revelado && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
     className: "b hueco chico",
-    onClick: reiniciar
-  }, "Ocultar de nuevo")), revelado && !sinMovimiento() && /*#__PURE__*/React.createElement(Confeti, null));
+    onClick: () => {
+      prepararAudio();
+      setEnEscena(true);
+    }
+  }, "Ver otra vez"), /*#__PURE__*/React.createElement("button", {
+    className: "b hueco chico",
+    onClick: () => setRevelado(false)
+  }, "Ocultar de nuevo"))), enEscena && ganador && /*#__PURE__*/React.createElement(EscenaGanador, {
+    datos: datos,
+    ciclo: ciclo,
+    cat: cat,
+    lista: lista,
+    conteo: conteo,
+    ganador: ganador,
+    cerrar: () => setEnEscena(false),
+    alTerminar: () => setRevelado(true)
+  }));
 }
 
-/** Pantalla de resultados: sirve para presentar en la reunión. */
+/** Pantalla de resultados: sirve para presentar en la reunión.
+    Se ve una categoría a la vez, la que se escoja. */
 function Resultados({
   datos,
   ciclo,
-  puedeRevelar = true,
-  volver
+  puedeRevelar = true
 }) {
+  const conGente = CATEGORIAS.filter(c => nominacionesDe(datos, ciclo.id, c).length > 0);
+  const [cat, setCat] = useState(conGente[0] || CATEGORIAS[0]);
   return /*#__PURE__*/React.createElement("div", {
     className: "presenta"
   }, /*#__PURE__*/React.createElement("div", {
     className: "bloque"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "cat-titulo"
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h1", null, ciclo.nombre), /*#__PURE__*/React.createElement("p", {
-    className: "pie",
-    style: {
-      marginBottom: 0
-    }
-  }, "Estos son los nominados de cada categoría.", ciclo.asignado ? " Los puntos ya se enviaron." : " Los puntos se envían después de la reunión.")), volver && /*#__PURE__*/React.createElement("button", {
-    className: "b hueco chico",
-    onClick: volver
-  }, "Volver"))), CATEGORIAS.map(c => /*#__PURE__*/React.createElement(CategoriaResultado, {
-    key: c,
+  }, /*#__PURE__*/React.createElement("h1", null, ciclo.nombre), /*#__PURE__*/React.createElement("p", {
+    className: "pie"
+  }, conGente.length === 0 ? "Este mes no tuvo nominaciones." : ciclo.asignado ? "Los puntos de este mes ya se enviaron." : "Los puntos se envían después de la reunión."), conGente.length > 0 && /*#__PURE__*/React.createElement(Campo, {
+    label: "Categoría"
+  }, /*#__PURE__*/React.createElement("select", {
+    value: cat,
+    onChange: e => setCat(e.target.value)
+  }, CATEGORIAS.map(c => {
+    const n = nominacionesDe(datos, ciclo.id, c).length;
+    return /*#__PURE__*/React.createElement("option", {
+      key: c,
+      value: c
+    }, c, n === 0 ? " — sin nominados" : ` — ${n} ${n === 1 ? "nominado" : "nominados"}`);
+  })))), conGente.length > 0 && /*#__PURE__*/React.createElement(CategoriaResultado, {
+    key: ciclo.id + cat,
     datos: datos,
     ciclo: ciclo,
-    cat: c,
+    cat: cat,
     puedeRevelar: puedeRevelar
-  })));
+  }));
 }
 
 /* ====================== nominar ====================== */
@@ -2279,14 +2472,14 @@ function Nominar({
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Nominar"), /*#__PURE__*/React.createElement("div", {
     className: "vacio"
-  }, /*#__PURE__*/React.createElement("b", null, "No hay ciclo abierto"), "Coordinación abre el ciclo cuando corresponda."));
+  }, /*#__PURE__*/React.createElement("b", null, "No hay un mes abierto"), "Coordinación lo abre cuando corresponda."));
   if (ciclo.estado !== "nominacion") return /*#__PURE__*/React.createElement("div", {
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Nominar"), /*#__PURE__*/React.createElement("p", {
     className: "pie"
-  }, "Ciclo ", ciclo.nombre), /*#__PURE__*/React.createElement("div", {
+  }, "Mes de ", ciclo.nombre), /*#__PURE__*/React.createElement("div", {
     className: "vacio"
-  }, /*#__PURE__*/React.createElement("b", null, "La nominación ya cerró"), ciclo.estado === "votacion" ? "El ciclo está en votación. Ya no se pueden agregar nominaciones." : "Este ciclo está cerrado."));
+  }, /*#__PURE__*/React.createElement("b", null, "La nominación ya cerró"), ciclo.estado === "votacion" ? "El mes está en votación. Ya no se pueden agregar nominaciones." : "Este mes ya está cerrado."));
   const nominables = datos.personas.filter(p => p.activo && p.id !== yo.id);
   const delCat = nominacionesDe(datos, ciclo.id, cat);
   const yaEsta = pid => delCat.find(n => n.persona === pid);
@@ -2319,7 +2512,7 @@ function Nominar({
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Nominar"), /*#__PURE__*/React.createElement("p", {
     className: "pie"
-  }, "Ciclo ", ciclo.nombre, ". Cada nominado recibe ", PUNTOS.nominado, " puntos cuando Coordinación acredite el ciclo, y el ganador de cada categoría llega a ", PUNTOS.ganador, "."), /*#__PURE__*/React.createElement(Campo, {
+  }, "Mes de ", ciclo.nombre, ". Cada nominado recibe ", PUNTOS.nominado, " puntos cuando Coordinación envíe los puntos, y el ganador de cada categoría llega a ", PUNTOS.ganador, "."), /*#__PURE__*/React.createElement(Campo, {
     label: "Categoría"
   }, /*#__PURE__*/React.createElement("select", {
     value: cat,
@@ -2363,7 +2556,7 @@ function Nominar({
     }
   }, "No puede nominarse a usted mismo. Si la persona ya está nominada en esa categoría, su texto se guarda como respaldo adicional.")), /*#__PURE__*/React.createElement("div", {
     className: "bloque"
-  }, /*#__PURE__*/React.createElement("h2", null, "Nominaciones de este ciclo"), /*#__PURE__*/React.createElement("p", {
+  }, /*#__PURE__*/React.createElement("h2", null, "Nominaciones de este mes"), /*#__PURE__*/React.createElement("p", {
     className: "pie"
   }, "Lo que lleva ", ciclo.nombre, " hasta ahora, en todas las categorías."), nominacionesDe(datos, ciclo.id).length === 0 ? /*#__PURE__*/React.createElement("div", {
     className: "vacio"
@@ -2428,7 +2621,7 @@ function Votar({
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Votar"), /*#__PURE__*/React.createElement("div", {
     className: "vacio"
-  }, /*#__PURE__*/React.createElement("b", null, "No hay ciclo abierto"), "Coordinación abre el ciclo cuando corresponda."));
+  }, /*#__PURE__*/React.createElement("b", null, "No hay un mes abierto"), "Coordinación lo abre cuando corresponda."));
   const nombreDe = pid => {
     var _datos$personas$find2;
     return ((_datos$personas$find2 = datos.personas.find(p => p.id === pid)) === null || _datos$personas$find2 === void 0 ? void 0 : _datos$personas$find2.nombre) || "—";
@@ -2437,7 +2630,7 @@ function Votar({
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Votar"), /*#__PURE__*/React.createElement("p", {
     className: "pie"
-  }, "Ciclo ", ciclo.nombre), /*#__PURE__*/React.createElement("div", {
+  }, "Mes de ", ciclo.nombre), /*#__PURE__*/React.createElement("div", {
     className: "vacio"
   }, /*#__PURE__*/React.createElement("b", null, "La votación todavía no abre"), "Primero se recogen las nominaciones. Cuando Coordinación cierre esa etapa podrá votar."));
 
@@ -2451,7 +2644,7 @@ function Votar({
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Votar"), /*#__PURE__*/React.createElement("p", {
     className: "pie"
-  }, "Ciclo ", ciclo.nombre, ". Un voto por categoría. Puede cambiarlo mientras la votación siga abierta.", pendientes > 0 && ` Le faltan ${pendientes} ${pendientes === 1 ? "categoría" : "categorías"} por votar.`), /*#__PURE__*/React.createElement("div", {
+  }, "Mes de ", ciclo.nombre, ". Un voto por categoría. Puede cambiarlo mientras la votación siga abierta.", pendientes > 0 && ` Le faltan ${pendientes} ${pendientes === 1 ? "categoría" : "categorías"} por votar.`), /*#__PURE__*/React.createElement("div", {
     className: "nota",
     style: {
       marginBottom: 0
@@ -2615,10 +2808,10 @@ function Ciclos({
     }
   }, ETAPAS[enCurso.estado].botón))) : /*#__PURE__*/React.createElement("div", {
     className: "bloque"
-  }, /*#__PURE__*/React.createElement("h2", null, "Abrir un ciclo"), /*#__PURE__*/React.createElement("p", {
+  }, /*#__PURE__*/React.createElement("h2", null, "Abrir un mes"), /*#__PURE__*/React.createElement("p", {
     className: "pie"
-  }, "No hay ninguno abierto. Solo puede haber uno a la vez."), /*#__PURE__*/React.createElement(Campo, {
-    label: "Nombre del ciclo"
+  }, "No hay ninguno abierto. Solo puede haber un mes a la vez."), /*#__PURE__*/React.createElement(Campo, {
+    label: "Nombre del mes"
   }, /*#__PURE__*/React.createElement("input", {
     value: nombre,
     onChange: e => setNombre(e.target.value),
@@ -2626,17 +2819,17 @@ function Ciclos({
   })), /*#__PURE__*/React.createElement("button", {
     className: "b oro",
     onClick: () => {
-      if (!nombre.trim()) return avisar("Póngale nombre al ciclo");
+      if (!nombre.trim()) return avisar("Póngale nombre al mes");
       crearCiclo(nombre.trim());
       setNombre("");
-      avisar("Ciclo abierto en etapa de nominación");
+      avisar("Mes abierto en etapa de nominación");
     }
-  }, "Abrir ciclo")), lista.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Abrir mes")), lista.length > 0 && /*#__PURE__*/React.createElement("div", {
     className: "bloque"
-  }, /*#__PURE__*/React.createElement("h2", null, "Ver un ciclo"), /*#__PURE__*/React.createElement("p", {
+  }, /*#__PURE__*/React.createElement("h2", null, "Ver un mes"), /*#__PURE__*/React.createElement("p", {
     className: "pie"
-  }, "Escoja cuál quiere revisar o presentar."), /*#__PURE__*/React.createElement(Campo, {
-    label: "Ciclo"
+  }, "Escoja el mes que quiere revisar o presentar."), /*#__PURE__*/React.createElement(Campo, {
+    label: "Mes"
   }, /*#__PURE__*/React.createElement("select", {
     value: elegido ? elegido.id : "",
     onChange: e => setVerId(e.target.value)
@@ -2647,7 +2840,7 @@ function Ciclos({
     className: "bloque"
   }, /*#__PURE__*/React.createElement("div", {
     className: "vacio"
-  }, /*#__PURE__*/React.createElement("b", null, "Todavía no hay resultados"), elegido.estado === "nominacion" ? "Este ciclo está recogiendo nominaciones. Los resultados aparecen cuando cierre la votación." : "La votación está abierta. Al cerrarla aparecen aquí los resultados.")), elegido && elegido.estado === "cerrado" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Resultados, {
+  }, /*#__PURE__*/React.createElement("b", null, "Todavía no hay resultados"), elegido.estado === "nominacion" ? "Este mes está recogiendo nominaciones. Los resultados aparecen cuando cierre la votación." : "La votación está abierta. Al cerrarla aparecen aquí los resultados.")), elegido && elegido.estado === "cerrado" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Resultados, {
     datos: datos,
     ciclo: elegido
   }), /*#__PURE__*/React.createElement("details", {
@@ -2661,7 +2854,7 @@ function Ciclos({
       fontWeight: 600,
       fontSize: 15
     }
-  }, elegido.asignado ? "Detalle administrativo del ciclo" : "Ajustar ganadores y enviar puntos"), /*#__PURE__*/React.createElement("p", {
+  }, elegido.asignado ? "Detalle administrativo del mes" : "Ajustar ganadores y enviar puntos"), /*#__PURE__*/React.createElement("p", {
     className: "pie",
     style: {
       marginTop: 12
@@ -2752,7 +2945,7 @@ function Ciclos({
       margin: 0
     }
   }, "Puntos enviados el ", fecha(elegido.asignadoFecha), ". Esto ya no se puede repetir."))), confirmar && /*#__PURE__*/React.createElement(Modal, {
-    titulo: "Enviar los puntos del ciclo",
+    titulo: "Enviar los puntos del mes",
     cerrar: () => setConfirmar(null),
     pie: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
       className: "b hueco",
@@ -2769,13 +2962,13 @@ function Ciclos({
     style: {
       marginTop: 0
     }
-  }, "Va a enviar los puntos de ", /*#__PURE__*/React.createElement("b", null, confirmar.nombre), ". Hasta ahora nadie los tiene: entran al saldo de cada persona en este momento, con la categoría y el ciclo en su historial."), /*#__PURE__*/React.createElement("p", {
+  }, "Va a enviar los puntos de ", /*#__PURE__*/React.createElement("b", null, confirmar.nombre), ". Hasta ahora nadie los tiene: entran al saldo de cada persona en este momento, con la categoría y el mes en su historial."), /*#__PURE__*/React.createElement("p", {
     style: {
       marginBottom: 0,
       color: "var(--soft)",
       fontSize: 14
     }
-  }, "Esto se hace una sola vez por ciclo. Cada movimiento queda con su fecha, su categoría y quién lo envió, así que siempre se puede explicar de dónde salió cada punto.")));
+  }, "Esto se hace una sola vez por mes. Cada movimiento queda con su fecha, su categoría y quién lo envió, así que siempre se puede explicar de dónde salió cada punto.")));
 }
 
 /* ====================== resumen ====================== */
@@ -3101,7 +3294,7 @@ function Personas({
       display: "block",
       marginBottom: 9
     }
-  }, "Permisos del ciclo"), /*#__PURE__*/React.createElement("label", {
+  }, "Permisos del mes"), /*#__PURE__*/React.createElement("label", {
     style: {
       display: "flex",
       gap: 9,
@@ -4008,10 +4201,10 @@ function Programa() {
   const asignarPuntos = cicloId => {
     const c = datos.ciclos.find(x => x.id === cicloId);
     if (!c) return {
-      error: "Ese ciclo ya no existe"
+      error: "Ese mes ya no existe"
     };
     if (c.asignado) return {
-      error: "Los puntos de ese ciclo ya se acreditaron"
+      error: "Los puntos de ese mes ya se enviaron"
     };
     const ahora = new Date().toISOString();
     const noms = nominacionesDe(datos, cicloId);
@@ -4135,7 +4328,7 @@ function Programa() {
       nominaciones: [],
       votos: []
     }));
-    avisar("Historial y ciclos borrados, saldos en cero");
+    avisar("Historial borrado, saldos en cero");
   };
   const reiniciar = () => {
     setDatos(inicial());
@@ -4179,7 +4372,7 @@ function Programa() {
   const pendientes = (datos.canjes || []).filter(c => c.estado === "Pendiente").length;
   const ciclo = cicloAbierto(datos);
   const porAcreditar = (datos.ciclos || []).filter(c => c.estado === "cerrado" && !c.asignado).length;
-  const secciones = esAdmin ? [["resumen", "Resumen"], ["ciclos", `Ciclos${porAcreditar ? ` (${porAcreditar})` : ""}`], ...(quien.nomina ? [["nominar", "Nominar"]] : []), ...(quien.vota ? [["votar", "Votar"]] : []), ["personas", "Personas"], ["premios", "Premios"], ["canjes", `Canjes${pendientes ? ` (${pendientes})` : ""}`], ["ajustes", "Ajustes"]] : [["saldo", "Mis puntos"], ...(quien.nomina ? [["nominar", "Nominar"]] : []), ...(quien.vota ? [["votar", "Votar"]] : []), ["canjes", "Mis canjes"]];
+  const secciones = esAdmin ? [["resumen", "Resumen"], ["ciclos", `Registros${porAcreditar ? ` (${porAcreditar})` : ""}`], ...(quien.nomina ? [["nominar", "Nominar"]] : []), ...(quien.vota ? [["votar", "Votar"]] : []), ["personas", "Personas"], ["premios", "Premios"], ["canjes", `Canjes${pendientes ? ` (${pendientes})` : ""}`], ["ajustes", "Ajustes"]] : [["saldo", "Mis puntos"], ...(quien.nomina ? [["nominar", "Nominar"]] : []), ...(quien.vota ? [["votar", "Votar"]] : []), ["canjes", "Mis canjes"]];
 
   /* Si pierde el permiso de la sección en la que estaba, no dejarlo en el vacío. */
   const valida = secciones.some(([k]) => k === seccion);
