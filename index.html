@@ -2041,42 +2041,73 @@ function prepararAudio() {
   }
 }
 
-/** Un golpe seco de tambor: ruido corto filtrado, que cae rápido. */
-function golpe(ctx, destino, t, volumen) {
-  const dur = 0.06;
-  const buf = ctx.createBuffer(1, Math.max(1, Math.ceil(ctx.sampleRate * dur)), ctx.sampleRate);
-  const datos = buf.getChannelData(0);
-  for (let i = 0; i < datos.length; i++) {
-    datos[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / datos.length, 1.4);
-  }
-  const fuente = ctx.createBufferSource();
-  fuente.buffer = buf;
-  const filtro = ctx.createBiquadFilter();
-  filtro.type = "bandpass";
-  filtro.frequency.value = 1900;
-  filtro.Q.value = 0.7;
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(volumen, t);
-  g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-  fuente.connect(filtro);
-  filtro.connect(g);
-  g.connect(destino);
-  fuente.start(t);
-  fuente.stop(t + dur);
+/** Ruido base, uno solo reutilizado por todos los golpes: pesa menos. */
+let bufRuido = null;
+function ruidoBase(ctx) {
+  if (bufRuido && bufRuido.sampleRate === ctx.sampleRate) return bufRuido;
+  const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.5), ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  bufRuido = buf;
+  return buf;
 }
 
-/** El redoble: golpes muy seguidos que van subiendo de intensidad. */
+/** Un golpe de tambor con sus dos capas:
+    el parche, que es un tono grave que cae de golpe, y las bordonas,
+    que son el rasgueo metálico de abajo. Juntas suenan a redoblante. */
+function golpe(ctx, destino, t, volumen) {
+  /* 1. el parche */
+  const parche = ctx.createOscillator();
+  parche.type = "triangle";
+  parche.frequency.setValueAtTime(235, t);
+  parche.frequency.exponentialRampToValueAtTime(125, t + 0.05);
+  const gParche = ctx.createGain();
+  gParche.gain.setValueAtTime(volumen * 0.95, t);
+  gParche.gain.exponentialRampToValueAtTime(0.0008, t + 0.075);
+  parche.connect(gParche);
+  gParche.connect(destino);
+  parche.start(t);
+  parche.stop(t + 0.085);
+
+  /* 2. las bordonas */
+  const dur = 0.095;
+  const fuente = ctx.createBufferSource();
+  fuente.buffer = ruidoBase(ctx);
+  const medio = ctx.createBiquadFilter();
+  medio.type = "bandpass";
+  medio.frequency.value = 1450;
+  medio.Q.value = 0.55;
+  const quitaGrave = ctx.createBiquadFilter();
+  quitaGrave.type = "highpass";
+  quitaGrave.frequency.value = 340;
+  const gRuido = ctx.createGain();
+  gRuido.gain.setValueAtTime(volumen * 0.6, t);
+  gRuido.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+  fuente.connect(medio);
+  medio.connect(quitaGrave);
+  quitaGrave.connect(gRuido);
+  gRuido.connect(destino);
+  /* arranca en un punto al azar del ruido, para que no suenen todos igual */
+  fuente.start(t, Math.random() * 0.4, dur);
+}
+
+/** El redoble: golpes dobles, muy seguidos, que van creciendo. */
 function redoble(ctx, destino, desde, duracion) {
-  const paso = 0.042; // unos 24 golpes por segundo
+  const paso = 0.031; // cerca de 32 golpes por segundo
   let t = desde,
     i = 0;
   while (t < desde + duracion) {
     const avance = (t - desde) / duracion;
-    const vol = (i % 2 === 0 ? 0.17 : 0.1) * (0.55 + 0.45 * avance);
-    golpe(ctx, destino, t, vol);
+    /* patrón de golpe doble: fuerte, suave, medio, suave */
+    const acento = i % 4 === 0 ? 1 : i % 2 === 0 ? 0.74 : 0.5;
+    const vol = 0.2 * acento * (0.5 + 0.5 * avance);
+    /* un poquito de desorden para que no suene a máquina */
+    golpe(ctx, destino, t + (Math.random() * 0.005 - 0.0025), vol);
     t += paso;
     i++;
   }
+  /* golpe final, más fuerte, justo antes del platillo */
+  golpe(ctx, destino, desde + duracion, 0.3);
 }
 
 /** El platillo del final, con su cola larga. */
@@ -2091,7 +2122,7 @@ function platillo(ctx, destino, t) {
   fuente.buffer = buf;
   const alto = ctx.createBiquadFilter();
   alto.type = "highpass";
-  alto.frequency.value = 3800;
+  alto.frequency.value = 2600;
   const g = ctx.createGain();
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(0.26, t + 0.015);
