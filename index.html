@@ -581,8 +581,23 @@ const CSS = `
   font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;margin-left:9px;vertical-align:2px;}
 .rec .votos-tag{font-family:var(--mono);font-size:21px;font-weight:600;color:var(--verde);}
 .rec .votos-tag.oro{color:var(--oro);}
-.rec .cuenta{font-family:var(--mono);font-size:clamp(46px,9vw,76px);font-weight:600;color:var(--oro);
-  text-align:center;line-height:1;animation:late .6s ease-in-out infinite;}
+.rec .cuenta{font-family:var(--mono);font-size:clamp(60px,13vw,120px);font-weight:600;color:var(--oro);
+  text-align:center;line-height:1;animation:pum .9s cubic-bezier(.2,.9,.3,1.2) both;}
+.rec .cuenta-pie{text-align:center;font-size:15px;color:var(--soft);margin-top:6px;letter-spacing:.02em;}
+.rec .anuncio{background:var(--verde);border-radius:4px;padding:26px 24px;text-align:center;margin-bottom:16px;
+  position:relative;overflow:hidden;animation:gana-entra .6s cubic-bezier(.2,.9,.3,1.1) both;}
+.rec .anuncio:before{content:"";position:absolute;inset:-40%;
+  background:conic-gradient(from 0deg, rgba(175,134,46,0) 0deg, rgba(217,190,121,.26) 60deg, rgba(175,134,46,0) 120deg);
+  animation:gira 5s linear infinite;}
+.rec .anuncio > *{position:relative;}
+.rec .anuncio .rotulo{font-size:13px;color:#A9B5B0;letter-spacing:.05em;}
+.rec .anuncio .quien-gana{font-size:clamp(28px,6vw,52px);font-weight:700;color:var(--oro-claro);
+  line-height:1.05;margin:6px 0 8px;letter-spacing:-.02em;}
+.rec .anuncio .cat-gana{font-size:15px;color:#EDE7DA;}
+.rec .anuncio .votos-gana{font-family:var(--mono);font-size:14px;color:#A9B5B0;margin-top:10px;}
+
+@keyframes pum{0%{transform:scale(.5);opacity:0;}55%{transform:scale(1.12);opacity:1;}100%{transform:scale(1);opacity:1;}}
+@keyframes gira{to{transform:rotate(360deg);}}
 
 @keyframes gana-entra{
   0%{transform:scale(.9);opacity:0;}
@@ -601,8 +616,8 @@ const CSS = `
 
 @media (prefers-reduced-motion:reduce){
   .rec .confeti{display:none;}
-  .rec .nominado.gana{animation:none;}
-  .rec .cuenta{animation:none;}
+  .rec .nominado.gana,.rec .anuncio,.rec .cuenta{animation:none;}
+  .rec .anuncio:before{display:none;}
 }
 
 @media (max-width:820px){
@@ -2042,8 +2057,9 @@ function CategoriaResultado({
   const lista = nominacionesDe(datos, ciclo.id, cat);
   const conteo = conteoVotos(datos, ciclo.id, cat);
   const ganadorId = ciclo.ganadores && ciclo.ganadores[cat];
-  const [fase, setFase] = useState("oculto"); // oculto · sorteo · revelado
+  const [fase, setFase] = useState("oculto"); // oculto · cuenta · sorteo · revelado
   const [marca, setMarca] = useState(-1);
+  const [numero, setNumero] = useState(3);
   const temporizadores = useRef([]);
   useEffect(() => () => temporizadores.current.forEach(clearTimeout), []);
   const nombreDe = pid => {
@@ -2051,32 +2067,41 @@ function CategoriaResultado({
     return p ? p.nombre : "—";
   };
   const idxGanador = lista.findIndex(n => n.id === ganadorId);
+  const ganador = lista[idxGanador] || null;
   const revelar = () => {
     if (!ganadorId || idxGanador < 0) return;
-    if (sinMovimiento() || lista.length === 1) {
+    if (sinMovimiento()) {
       setFase("revelado");
       setMarca(idxGanador);
       return;
     }
-    setFase("sorteo");
-    /* Recorre los nominados y va frenando, como una rifa. */
-    const pasos = Math.max(10, lista.length * 4);
+
+    /* Primero la cuenta regresiva, después el recorrido que va frenando. */
+    setFase("cuenta");
+    setNumero(3);
     let t = 0;
+    [2, 1].forEach(n => {
+      t += 800;
+      temporizadores.current.push(setTimeout(() => setNumero(n), t));
+    });
+    t += 800;
+    temporizadores.current.push(setTimeout(() => setFase("sorteo"), t));
+    const pasos = Math.max(12, lista.length * 5);
     for (let i = 0; i < pasos; i++) {
-      const espera = 70 + Math.round(Math.pow(i / pasos, 2.4) * 240);
-      t += espera;
+      t += 65 + Math.round(Math.pow(i / pasos, 2.6) * 260);
       temporizadores.current.push(setTimeout(() => setMarca(i % lista.length), t));
     }
     temporizadores.current.push(setTimeout(() => {
       setMarca(idxGanador);
       setFase("revelado");
-    }, t + 320));
+    }, t + 340));
   };
   const reiniciar = () => {
     temporizadores.current.forEach(clearTimeout);
     temporizadores.current = [];
     setFase("oculto");
     setMarca(-1);
+    setNumero(3);
   };
   if (!lista.length) return /*#__PURE__*/React.createElement("div", {
     className: "bloque"
@@ -2096,12 +2121,37 @@ function CategoriaResultado({
       fontSize: 13,
       color: "var(--soft)"
     }
-  }, lista.length, " ", lista.length === 1 ? "nominado" : "nominados", revelado && ` · ${votosDe(datos, ciclo.id, cat).length} votos`)), fase === "sorteo" && /*#__PURE__*/React.createElement("div", {
+  }, lista.length, " ", lista.length === 1 ? "nominado" : "nominados", revelado && ` · ${votosDe(datos, ciclo.id, cat).length} votos`)), fase === "cuenta" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "20px 0 12px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cuenta",
+    key: numero
+  }, numero), /*#__PURE__*/React.createElement("div", {
+    className: "cuenta-pie"
+  }, "Y el ganador es…")), fase === "sorteo" && /*#__PURE__*/React.createElement("div", {
+    style: {
+      margin: "20px 0 12px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     className: "cuenta",
     style: {
-      margin: "18px 0 10px"
+      animation: "none"
     }
-  }, "…"), /*#__PURE__*/React.createElement("div", {
+  }, "★"), /*#__PURE__*/React.createElement("div", {
+    className: "cuenta-pie"
+  }, "Y el ganador es…")), revelado && ganador && /*#__PURE__*/React.createElement("div", {
+    className: "anuncio"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "rotulo"
+  }, "Ganador"), /*#__PURE__*/React.createElement("div", {
+    className: "quien-gana"
+  }, nombreDe(ganador.persona)), /*#__PURE__*/React.createElement("div", {
+    className: "cat-gana"
+  }, cat), /*#__PURE__*/React.createElement("div", {
+    className: "votos-gana"
+  }, conteo[ganador.id] || 0, " de ", votosDe(datos, ciclo.id, cat).length, " votos")), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 12
     }
@@ -2170,12 +2220,12 @@ function CategoriaResultado({
       fontSize: 13.5,
       color: "var(--soft)"
     }
-  }, ganadorId ? "El ganador se revela en la reunión." : "Coordinación todavía no marca al ganador.")), fase === "sorteo" && /*#__PURE__*/React.createElement("span", {
+  }, ganadorId ? "El ganador se revela en la reunión." : "Coordinación todavía no marca al ganador.")), (fase === "cuenta" || fase === "sorteo") && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 13.5,
       color: "var(--soft)"
     }
-  }, "Y el ganador es…"), revelado && /*#__PURE__*/React.createElement("button", {
+  }, "Revelando…"), revelado && /*#__PURE__*/React.createElement("button", {
     className: "b hueco chico",
     onClick: reiniciar
   }, "Ocultar de nuevo")), revelado && !sinMovimiento() && /*#__PURE__*/React.createElement(Confeti, null));
@@ -2504,6 +2554,8 @@ function Votar({
 
 /* ====================== ciclos ====================== */
 
+/** Cómo se lee el estado de un ciclo en una sola frase. */
+const estadoTexto = c => c.estado === "nominacion" ? "Nominación abierta" : c.estado === "votacion" ? "Votación abierta" : c.asignado ? "Puntos enviados" : "Cerrado · puntos pendientes";
 function Ciclos({
   datos,
   setDatos,
@@ -2516,117 +2568,56 @@ function Ciclos({
 }) {
   const [nombre, setNombre] = useState("");
   const [confirmar, setConfirmar] = useState(null);
-  const [presentando, setPresentando] = useState(null);
-  const ciclo = cicloAbierto(datos);
-  const cerrados = (datos.ciclos || []).filter(c => c.estado === "cerrado");
+  const [verId, setVerId] = useState("");
+  const enCurso = cicloAbierto(datos);
+  /* Del más reciente al más viejo, que es como se buscan. */
+  const lista = [...(datos.ciclos || [])].reverse();
+  const elegido = lista.find(c => c.id === verId) || lista[0] || null;
   const nombreDe = pid => {
-    var _datos$personas$find3;
-    return ((_datos$personas$find3 = datos.personas.find(p => p.id === pid)) === null || _datos$personas$find3 === void 0 ? void 0 : _datos$personas$find3.nombre) || "—";
+    const p = datos.personas.find(x => x.id === pid);
+    return p ? p.nombre : "—";
   };
-
-  /* por acreditar: cerrado y sin asignar */
-  const porAcreditar = (datos.ciclos || []).filter(c => c.estado === "cerrado" && !c.asignado);
-  const resumenAcreditacion = c => {
+  const resumenEnvio = c => {
     const noms = nominacionesDe(datos, c.id);
     const ganadores = Object.values(c.ganadores || {}).filter(Boolean);
     return {
       nominados: noms.length,
       ganadores: ganadores.length,
       total: noms.length * PUNTOS.nominado + ganadores.length * EXTRA_GANADOR,
-      faltan: CATEGORIAS.filter(cat => {
-        var _c$ganadores;
-        return nominacionesDe(datos, c.id, cat).length > 0 && !((_c$ganadores = c.ganadores) !== null && _c$ganadores !== void 0 && _c$ganadores[cat]);
-      })
+      faltan: CATEGORIAS.filter(cat => nominacionesDe(datos, c.id, cat).length > 0 && !(c.ganadores || {})[cat])
     };
   };
-  const Tabla = ({
-    c,
-    editable
-  }) => /*#__PURE__*/React.createElement(React.Fragment, null, CATEGORIAS.map(cat => {
-    var _orden$;
-    const lista = nominacionesDe(datos, c.id, cat);
-    if (!lista.length) return /*#__PURE__*/React.createElement("div", {
-      key: cat,
-      style: {
-        marginBottom: 16
-      }
-    }, /*#__PURE__*/React.createElement("h3", {
-      style: {
-        fontSize: 15,
-        marginBottom: 4
-      }
-    }, cat), /*#__PURE__*/React.createElement("p", {
-      style: {
-        fontSize: 13.5,
-        color: "var(--soft)",
-        margin: 0
-      }
-    }, "Sin nominados."));
-    const conteo = conteoVotos(datos, c.id, cat);
-    const orden = [...lista].sort((a, b) => (conteo[b.id] || 0) - (conteo[a.id] || 0));
-    const tope = conteo[(_orden$ = orden[0]) === null || _orden$ === void 0 ? void 0 : _orden$.id] || 0;
-    const empate = orden.filter(n => (conteo[n.id] || 0) === tope && tope > 0).length > 1;
-    return /*#__PURE__*/React.createElement("div", {
-      key: cat,
-      style: {
-        marginBottom: 20
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "baseline",
-        gap: 10
-      }
-    }, /*#__PURE__*/React.createElement("h3", {
-      style: {
-        fontSize: 15,
-        marginBottom: 7
-      }
-    }, cat), empate && editable && /*#__PURE__*/React.createElement("span", {
-      className: "etq esp"
-    }, "Empate en primer lugar")), /*#__PURE__*/React.createElement("div", {
-      className: "scroll"
-    }, /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "Nominado"), /*#__PURE__*/React.createElement("th", {
-      className: "der"
-    }, "Votos"), /*#__PURE__*/React.createElement("th", null, "Ganador"))), /*#__PURE__*/React.createElement("tbody", null, orden.map(n => {
-      var _c$ganadores2;
-      const esGanador = ((_c$ganadores2 = c.ganadores) === null || _c$ganadores2 === void 0 ? void 0 : _c$ganadores2[cat]) === n.id;
-      return /*#__PURE__*/React.createElement("tr", {
-        key: n.id
-      }, /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("b", null, nombreDe(n.persona)), /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 12.5,
-          color: "var(--soft)"
-        }
-      }, "Nominado por ", nombreDe(n.por), n.apoyos.length > 0 && ` · ${n.apoyos.length} respaldo${n.apoyos.length === 1 ? "" : "s"}`)), /*#__PURE__*/React.createElement("td", {
-        className: "der"
-      }, /*#__PURE__*/React.createElement("b", null, conteo[n.id] || 0)), /*#__PURE__*/React.createElement("td", null, editable ? /*#__PURE__*/React.createElement("button", {
-        className: `b ${esGanador ? "oro" : "hueco"} chico`,
-        onClick: () => fijarGanador(c.id, cat, esGanador ? null : n.id)
-      }, esGanador ? "Ganador" : "Marcar") : esGanador ? /*#__PURE__*/React.createElement("span", {
-        className: "etq list"
-      }, "Ganador") : ""));
-    })))));
-  }));
-
-  /* Modo presentación: ocupa la pantalla para proyectar en la reunión. */
-  if (presentando) {
-    const c = datos.ciclos.find(x => x.id === presentando);
-    if (c) return /*#__PURE__*/React.createElement(Resultados, {
-      datos: datos,
-      ciclo: c,
-      volver: () => setPresentando(null)
-    });
-  }
   return /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(AvisoPermisos, {
     datos: datos,
     ir: ir
-  }), !ciclo && /*#__PURE__*/React.createElement("div", {
+  }), enCurso ? /*#__PURE__*/React.createElement("div", {
+    className: "bloque"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cat-titulo"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", null, enCurso.nombre), /*#__PURE__*/React.createElement("p", {
+    className: "pie",
+    style: {
+      marginBottom: 0
+    }
+  }, nominacionesDe(datos, enCurso.id).length, " nominaciones ·", " ", votosDe(datos, enCurso.id).length, " votos")), /*#__PURE__*/React.createElement("span", {
+    className: "etq esp"
+  }, estadoTexto(enCurso))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "b",
+    onClick: () => {
+      const era = enCurso.estado;
+      avanzarCiclo(enCurso.id);
+      avisar(era === "nominacion" ? "Votación abierta" : "Votación cerrada");
+      setVerId(enCurso.id);
+    }
+  }, ETAPAS[enCurso.estado].botón))) : /*#__PURE__*/React.createElement("div", {
     className: "bloque"
   }, /*#__PURE__*/React.createElement("h2", null, "Abrir un ciclo"), /*#__PURE__*/React.createElement("p", {
     className: "pie"
-  }, "Solo puede haber un ciclo abierto a la vez."), /*#__PURE__*/React.createElement(Campo, {
+  }, "No hay ninguno abierto. Solo puede haber uno a la vez."), /*#__PURE__*/React.createElement(Campo, {
     label: "Nombre del ciclo"
   }, /*#__PURE__*/React.createElement("input", {
     value: nombre,
@@ -2640,67 +2631,105 @@ function Ciclos({
       setNombre("");
       avisar("Ciclo abierto en etapa de nominación");
     }
-  }, "Abrir ciclo")), ciclo && /*#__PURE__*/React.createElement("div", {
+  }, "Abrir ciclo")), lista.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "bloque"
+  }, /*#__PURE__*/React.createElement("h2", null, "Ver un ciclo"), /*#__PURE__*/React.createElement("p", {
+    className: "pie"
+  }, "Escoja cuál quiere revisar o presentar."), /*#__PURE__*/React.createElement(Campo, {
+    label: "Ciclo"
+  }, /*#__PURE__*/React.createElement("select", {
+    value: elegido ? elegido.id : "",
+    onChange: e => setVerId(e.target.value)
+  }, lista.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c.id,
+    value: c.id
+  }, c.nombre, " — ", estadoTexto(c)))))), elegido && elegido.estado !== "cerrado" && /*#__PURE__*/React.createElement("div", {
     className: "bloque"
   }, /*#__PURE__*/React.createElement("div", {
+    className: "vacio"
+  }, /*#__PURE__*/React.createElement("b", null, "Todavía no hay resultados"), elegido.estado === "nominacion" ? "Este ciclo está recogiendo nominaciones. Los resultados aparecen cuando cierre la votación." : "La votación está abierta. Al cerrarla aparecen aquí los resultados.")), elegido && elegido.estado === "cerrado" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Resultados, {
+    datos: datos,
+    ciclo: elegido
+  }), /*#__PURE__*/React.createElement("details", {
+    className: "bloque",
     style: {
-      display: "flex",
-      justifyContent: "space-between",
-      gap: 12,
-      flexWrap: "wrap",
-      alignItems: "baseline"
+      marginTop: 0
     }
-  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", null, ciclo.nombre), /*#__PURE__*/React.createElement("p", {
+  }, /*#__PURE__*/React.createElement("summary", {
+    style: {
+      cursor: "pointer",
+      fontWeight: 600,
+      fontSize: 15
+    }
+  }, elegido.asignado ? "Detalle administrativo del ciclo" : "Ajustar ganadores y enviar puntos"), /*#__PURE__*/React.createElement("p", {
     className: "pie",
     style: {
-      marginBottom: 0
+      marginTop: 12
     }
-  }, nominacionesDe(datos, ciclo.id).length, " nominaciones ·", " ", votosDe(datos, ciclo.id).length, " votos emitidos")), /*#__PURE__*/React.createElement("span", {
-    className: "etq esp"
-  }, ETAPAS[ciclo.estado].nombre)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginTop: 16
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "b",
-    onClick: () => {
-      avanzarCiclo(ciclo.id);
-      avisar(ciclo.estado === "nominacion" ? "Votación abierta" : "Votación cerrada");
-    }
-  }, ETAPAS[ciclo.estado].botón)), ciclo.estado === "votacion" && /*#__PURE__*/React.createElement("p", {
-    style: {
-      fontSize: 13,
-      color: "var(--soft)",
-      margin: "12px 0 0"
-    }
-  }, "Mientras la votación esté abierta, el jurado no ve el conteo. Usted sí, al cerrarla.")), porAcreditar.map(c => {
-    const r = resumenAcreditacion(c);
-    return /*#__PURE__*/React.createElement("div", {
-      className: "bloque",
-      key: c.id
-    }, /*#__PURE__*/React.createElement("h2", null, c.nombre, " · resultados"), /*#__PURE__*/React.createElement("p", {
-      className: "pie"
-    }, "La votación cerró. El más votado de cada categoría ya quedó marcado como ganador; puede cambiarlo si hubo empate o algún criterio aparte. Los puntos todavía no se han enviado: nadie los tiene hasta que use el botón de abajo."), /*#__PURE__*/React.createElement("div", {
+  }, "Aquí sí se ve el conteo y quién está marcado como ganador. No lo abra con la pantalla proyectada."), CATEGORIAS.map(cat => {
+    const noms = nominacionesDe(datos, elegido.id, cat);
+    if (!noms.length) return /*#__PURE__*/React.createElement("div", {
+      key: cat,
       style: {
-        marginBottom: 18
+        marginBottom: 14
       }
-    }, /*#__PURE__*/React.createElement("button", {
-      className: "b",
-      onClick: () => setPresentando(c.id)
-    }, "Presentar en la reunión"), /*#__PURE__*/React.createElement("p", {
+    }, /*#__PURE__*/React.createElement("h3", {
       style: {
-        fontSize: 13,
+        fontSize: 14.5,
+        marginBottom: 3
+      }
+    }, cat), /*#__PURE__*/React.createElement("p", {
+      style: {
+        fontSize: 13.5,
         color: "var(--soft)",
-        margin: "9px 0 0"
+        margin: 0
       }
-    }, "Abre la pantalla para proyectar: muestra los nominados sin decir quién ganó, y usted revela cada categoría cuando quiera.")), /*#__PURE__*/React.createElement(Tabla, {
-      c: c,
-      editable: true
-    }), /*#__PURE__*/React.createElement("div", {
+    }, "Sin nominados."));
+    const conteo = conteoVotos(datos, elegido.id, cat);
+    const orden = [...noms].sort((a, b) => (conteo[b.id] || 0) - (conteo[a.id] || 0));
+    const tope = conteo[orden[0].id] || 0;
+    const empate = orden.filter(n => (conteo[n.id] || 0) === tope && tope > 0).length > 1;
+    return /*#__PURE__*/React.createElement("div", {
+      key: cat,
+      style: {
+        marginBottom: 20
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "cat-titulo"
+    }, /*#__PURE__*/React.createElement("h3", {
+      style: {
+        fontSize: 14.5
+      }
+    }, cat), empate && !elegido.asignado && /*#__PURE__*/React.createElement("span", {
+      className: "etq esp"
+    }, "Empate en primer lugar")), /*#__PURE__*/React.createElement("div", {
+      className: "scroll"
+    }, /*#__PURE__*/React.createElement("table", null, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "Nominado"), /*#__PURE__*/React.createElement("th", {
+      className: "der"
+    }, "Votos"), /*#__PURE__*/React.createElement("th", null, "Ganador"))), /*#__PURE__*/React.createElement("tbody", null, orden.map(n => {
+      const esGanador = (elegido.ganadores || {})[cat] === n.id;
+      return /*#__PURE__*/React.createElement("tr", {
+        key: n.id
+      }, /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("b", null, nombreDe(n.persona)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12.5,
+          color: "var(--soft)"
+        }
+      }, "Nominado por ", nombreDe(n.por))), /*#__PURE__*/React.createElement("td", {
+        className: "der"
+      }, /*#__PURE__*/React.createElement("b", null, conteo[n.id] || 0)), /*#__PURE__*/React.createElement("td", null, elegido.asignado ? esGanador ? /*#__PURE__*/React.createElement("span", {
+        className: "etq list"
+      }, "Ganador") : "" : /*#__PURE__*/React.createElement("button", {
+        className: `b ${esGanador ? "oro" : "hueco"} chico`,
+        onClick: () => fijarGanador(elegido.id, cat, esGanador ? null : n.id)
+      }, esGanador ? "Ganador" : "Marcar")));
+    })))));
+  }), !elegido.asignado && (() => {
+    const r = resumenEnvio(elegido);
+    return /*#__PURE__*/React.createElement("div", {
       style: {
         borderTop: "1px solid var(--linea)",
-        paddingTop: 16,
-        marginTop: 4
+        paddingTop: 16
       }
     }, r.faltan.length > 0 ? /*#__PURE__*/React.createElement("div", {
       className: "nota",
@@ -2712,35 +2741,17 @@ function Ciclos({
         fontSize: 14,
         marginTop: 0
       }
-    }, "Se enviarán ", /*#__PURE__*/React.createElement("b", null, miles(r.total), " puntos"), ": ", PUNTOS.nominado, " a cada uno de los", " ", r.nominados, " nominados, más ", EXTRA_GANADOR, " adicionales a los ", r.ganadores, " ganadores, que así llegan a ", PUNTOS.ganador, "."), /*#__PURE__*/React.createElement("button", {
+    }, "Se enviarán ", /*#__PURE__*/React.createElement("b", null, miles(r.total), " puntos"), ": ", PUNTOS.nominado, " a cada uno de los", " ", r.nominados, " nominados, más ", EXTRA_GANADOR, " adicionales a los ", r.ganadores, " ", "ganadores, que así llegan a ", PUNTOS.ganador, "."), /*#__PURE__*/React.createElement("button", {
       className: "b oro",
-      onClick: () => setConfirmar(c)
-    }, "Enviar puntos"))));
-  }), cerrados.filter(c => c.asignado).map(c => /*#__PURE__*/React.createElement("div", {
-    className: "bloque",
-    key: c.id
-  }, /*#__PURE__*/React.createElement("div", {
+      onClick: () => setConfirmar(elegido)
+    }, "Enviar puntos")));
+  })(), elegido.asignado && /*#__PURE__*/React.createElement("p", {
     style: {
-      display: "flex",
-      justifyContent: "space-between",
-      gap: 12,
-      alignItems: "baseline"
+      fontSize: 13.5,
+      color: "var(--soft)",
+      margin: 0
     }
-  }, /*#__PURE__*/React.createElement("h2", null, c.nombre), /*#__PURE__*/React.createElement("span", {
-    className: "etq list"
-  }, "Puntos enviados")), /*#__PURE__*/React.createElement("p", {
-    className: "pie"
-  }, "Puntos enviados el ", fecha(c.asignadoFecha), "."), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "b hueco chico",
-    onClick: () => setPresentando(c.id)
-  }, "Volver a presentar")), /*#__PURE__*/React.createElement(Tabla, {
-    c: c,
-    editable: false
-  }))), confirmar && /*#__PURE__*/React.createElement(Modal, {
+  }, "Puntos enviados el ", fecha(elegido.asignadoFecha), ". Esto ya no se puede repetir."))), confirmar && /*#__PURE__*/React.createElement(Modal, {
     titulo: "Enviar los puntos del ciclo",
     cerrar: () => setConfirmar(null),
     pie: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
@@ -3519,8 +3530,8 @@ function Canjes({
   const lista = datos.canjes.filter(c => filtro === "Todos" || c.estado === filtro);
   const etq = e => e === "Entregado" ? "list" : e === "Rechazado" ? "no" : "esp";
   const exportar = () => csv("canjes.csv", [["Código", "Fecha", "Persona", "Premio", "Puntos", "Estado"], ...datos.canjes.map(c => {
-    var _datos$personas$find4;
-    return [c.codigo, c.fecha, (_datos$personas$find4 = datos.personas.find(p => p.id === c.persona)) === null || _datos$personas$find4 === void 0 ? void 0 : _datos$personas$find4.nombre, c.premioNombre, c.costo, c.estado];
+    var _datos$personas$find3;
+    return [c.codigo, c.fecha, (_datos$personas$find3 = datos.personas.find(p => p.id === c.persona)) === null || _datos$personas$find3 === void 0 ? void 0 : _datos$personas$find3.nombre, c.premioNombre, c.costo, c.estado];
   })]);
   return /*#__PURE__*/React.createElement("div", {
     className: "bloque"
@@ -3599,9 +3610,9 @@ function Canjes({
     }, "Cancelar"), /*#__PURE__*/React.createElement("button", {
       className: "b peligro",
       onClick: () => {
-        var _datos$personas$find5;
+        var _datos$personas$find4;
         rechazar(rechazando.codigo, motivo.trim());
-        avisar(`Puntos devueltos a ${(_datos$personas$find5 = datos.personas.find(p => p.id === rechazando.persona)) === null || _datos$personas$find5 === void 0 ? void 0 : _datos$personas$find5.nombre}`);
+        avisar(`Puntos devueltos a ${(_datos$personas$find4 = datos.personas.find(p => p.id === rechazando.persona)) === null || _datos$personas$find4 === void 0 ? void 0 : _datos$personas$find4.nombre}`);
         setRechazando(null);
       }
     }, "Rechazar y devolver puntos"))
@@ -4006,7 +4017,7 @@ function Programa() {
     const noms = nominacionesDe(datos, cicloId);
     const nuevos = [];
     noms.forEach(n => {
-      var _c$ganadores3;
+      var _c$ganadores;
       nuevos.push({
         id: id(),
         persona: n.persona,
@@ -4019,7 +4030,7 @@ function Programa() {
         fecha: ahora,
         por: yo.id
       });
-      if (((_c$ganadores3 = c.ganadores) === null || _c$ganadores3 === void 0 ? void 0 : _c$ganadores3[n.cat]) === n.id) {
+      if (((_c$ganadores = c.ganadores) === null || _c$ganadores === void 0 ? void 0 : _c$ganadores[n.cat]) === n.id) {
         nuevos.push({
           id: id(),
           persona: n.persona,
